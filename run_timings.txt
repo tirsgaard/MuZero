@@ -1,0 +1,12 @@
+Baseline: 02:47 - 02:57
+CUDNN: 02:47
+duel GPU 02:40
+30 threads 02:07
+60 threads 02:35
+sleep 0.1 05:16
+sleep 0.01 02:13
+sleep 0.005 02:24
+sleep 0.01 + priority 02:06
+gpu sleep + 0.01 + priority 02:16
+30 threads + priority 02:13
+30 threads + priority 02:12
