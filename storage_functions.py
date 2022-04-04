@@ -2,7 +2,6 @@ import numpy as np
 from collections import deque, defaultdict
 from multiprocessing import Queue
 #from torch.multiprocessing import Queue
-from line_profiler_pycharm import profile
 class experience_replay_server:
     def __init__(self, experience_settings, MCTS_settings):
         self.hist_size = experience_settings["history_size"]  # The number of sequences of frames to store in memory
@@ -81,7 +80,6 @@ class experience_replay_server:
         self.P_replace_idx = (self.P_replace_idx + 1) % self.hist_size  # sequence to next replace
         self.total_store += 1
 
-    @profile
     def return_batches(self, batch_size, alpha, K):
         # Normalize priority dist
         if alpha != 1:
@@ -177,7 +175,6 @@ class experience_replay_server:
         pi_batch = np.stack(pi_batch)
         z_batch = np.stack(z_batch)
 
-    @profile
     def get_sample(self, batch_idx, K):
         # Get values from storage
         hist_idx = batch_idx // self.seq_size

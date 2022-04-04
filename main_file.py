@@ -7,7 +7,7 @@ Created on Sat Nov 23 16:44:33 2019
 """
 # File for running the entire program
 
-from go_model import ResNet, ResNetBasicBlock
+#from go_model import ResNet, ResNetBasicBlock
 from game_functions import sim_games
 from training_functions import save_model, load_latest_model, model_trainer
 from storage_functions import experience_replay_server
