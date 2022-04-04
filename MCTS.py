@@ -153,7 +153,7 @@ def select_node(root_node, min_Q, max_Q, stored_jobs, MCTS_settings):
 def expand_node(stored_jobs, f_g_Q, f_g_send, f_g_rec, MCTS_settings):
     obs_size = MCTS_settings["observation_size"]
     # Store values for updating
-    S_array = np.empty((len(stored_jobs), ) + (obs_size,), dtype=bool)
+    S_array = np.empty((len(stored_jobs), ) + obs_size, dtype=bool)
     a_array = np.empty((len(stored_jobs), ), dtype=int)
 
     k = 0
