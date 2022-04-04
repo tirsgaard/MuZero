@@ -12,18 +12,19 @@ MCTS_settings = {"n_parallel_explorations": 4,  # Number of pseudo-parrallel run
 
 # Settings for experience replay and storing of values in general
 experience_settings = {"history_size": 50,  # The number of sequences of frames to store in memory
-                    "sequence_length": 10,  # The number of frames in each sequence
+                    "sequence_length": 1000,  # The number of frames in each sequence
                     "n_bootstrap": 4,  # Number of steps forward to bootstrap from
                     "past_obs": 1,
-                    "K": 1  # Number of steps to unroll during training. Needed here to determine delay of sending
+                    "K": 2  # Number of steps to unroll during training. Needed here to determine delay of sending
                    }
-training_settings = {"train_batch_size": 48,  # Batch size on GPU during training
-                     "num_epochs": 2000,
+training_settings = {"train_batch_size": 32,  # Batch size on GPU during training
+                     "num_epochs": 4*10**4,
                      "alpha": 1,
-                     "lr_init": 0.05,  # Original Atari rate was 0.05
-                     "lr_decay_rate": 0.1,
-                     "lr_decay_steps": 400e3,  # Original Atari was 350e3
-                     "momentum": 0.0  # Original was 0.9
+                     "beta": 1,
+                     "lr_init": 0.04,  # Original Atari rate was 0.05
+                     "lr_decay_rate": 0.5, # Original Atari rate was 0.1
+                     "lr_decay_steps": 10000,  # Original Atari was 350e3
+                     "momentum": 0  # Original was 0.9
                      }
 
 
@@ -45,10 +46,11 @@ for i in range(N_episodes):
     # Sample epiosde length
     episode_len = np.random.randint(1, max_episode_len)
 
-    S_stack = np.zeros((episode_len, obs_size[0], obs_size[1]))
-    for ii in range(obs_size[0]):
-        for jj in range(obs_size[1]):
-            S_stack[:, ii, jj] = np.arange(episode_len)
+    S_stack = np.random.rand(episode_len, obs_size[0], obs_size[1])
+    S_stack[:, 0, 0] = np.arange(episode_len)
+    #for ii in range(obs_size[0]):
+    #    for jj in range(obs_size[1]):
+    #        S_stack[:, ii, jj] = np.arange(episode_len)
 
     a_stack = np.zeros((episode_len, action_size[0]))
     r_stack = np.arange(episode_len)  # np.ones((episode_len,))#
@@ -64,8 +66,6 @@ for i in range(N_episodes):
             EX_server.recv_store()
     total_samples += episode_len
 
-writer = SummaryWriter()
-trainer = model_trainer(writer, EX_server, experience_settings, training_settings, MCTS_settings)
 
 
 def resnet40(in_channels, filter_size=128, board_size=9, deepths=[19]):
@@ -79,66 +79,103 @@ import torch.nn.functional as F
 
 
 class dummy_networkG(nn.Module):
-    def __init__(self, input_shape, output1_shape):
+    def __init__(self, input_shape, output1_shape, hidden_size):
         super().__init__()
         self.input_shape = input_shape
         self.output1_shape = output1_shape
-        self.layer1 = nn.Linear(np.prod(input_shape), np.prod(output1_shape), bias=True)
-        self.activation1 = nn.ELU()
-        self.activation2 = nn.ELU()
-        self.layer2 = nn.Linear(np.prod(input_shape), 1, bias=True)
+        self.hidden_size = hidden_size
 
+        # Hidden state head
+        self.layer1_1 = nn.Linear(np.prod(input_shape), self.hidden_size)
+        self.activation1_1 = nn.ReLU()
+        self.layer1_2 = nn.Linear(self.hidden_size, np.prod(output1_shape))
+        self.activation1_2 = nn.ReLU()
+        # Reward head
+        self.layer2_1 = nn.Linear(np.prod(input_shape), self.hidden_size)
+        self.activation2_1 = nn.ReLU()
+        self.layer2_2 = nn.Linear(self.hidden_size, 1)
 
     def forward(self, x):
-        x = torch.reshape(x, (-1, ) + (np.prod(self.input_shape),)) # Flatten
-        S = self.activation1(self.layer1(x))
-        S = torch.reshape(S, (-1,) + self.output1_shape)
-        reward = self.activation2(self.layer2(x))
+        x_flat = x.view((-1, ) + (np.prod(self.input_shape),))  # Flatten
+        # Hidden state
+        S = self.activation1_1(self.layer1_1(x_flat))
+        S = self.activation1_2(self.layer1_2(S))
+        S = torch.reshape(S, (-1,) + self.output1_shape) + x  # Residual connection
+        # Reward state
+        reward = self.activation2_1(self.layer2_1(x_flat))
+        reward = self.layer2_2(reward)
         return [S, reward]
 
 class dummy_networkH(nn.Module):
-    def __init__(self, input_shape, output1_shape):
+    def __init__(self, input_shape, output1_shape, hidden_size):
         super().__init__()
         self.input_shape = input_shape
         self.output1_shape = output1_shape
-        self.layer1 = nn.Linear(np.prod(input_shape), np.prod(output1_shape), bias=True)
-        self.activation1 = nn.ELU()
+        self.hidden_size = hidden_size
+        self.layer1_1 = nn.Linear(np.prod(input_shape), self.hidden_size)
+        self.activation1_1 = nn.ReLU()
+        self.layer1_2 = nn.Linear(self.hidden_size, np.prod(output1_shape))
+        self.activation1_2 = nn.ReLU()
 
     def forward(self, x):
-        x = torch.reshape(x, (-1, ) + (np.prod(self.input_shape),))  # Flatten
-        S = self.activation1(self.layer1(x))
+        x_flat = x.view((-1, ) + (np.prod(self.input_shape),))  # Flatten
+        S = self.activation1_1(self.layer1_1(x_flat))
+        S = self.activation1_2(self.layer1_2(S)) + x_flat  # Residual connection
         S = torch.reshape(S, (-1,) + self.output1_shape)
         return S
 
 class dummy_networkF(nn.Module):
-    def __init__(self, input_shape, output1_shape):
+    def __init__(self, input_shape, output1_shape, hidden_size):
         super(dummy_networkF, self).__init__()
         self.input_shape = input_shape
         self.output1_shape = output1_shape
-
-        hidden_n = 256
-        self.layer1_1 = nn.Linear(np.prod(input_shape), hidden_n, bias=True)
-        self.layer1_2 = nn.Linear(hidden_n, np.prod(output1_shape), bias=True)
-        self.activation1_1 = nn.ELU()
+        self.hidden_size = hidden_size
+        # Policy head
+        self.layer1_1 = nn.Linear(np.prod(input_shape), self.hidden_size)
+        self.activation1_1 = nn.ReLU()
+        self.layer1_2 = nn.Linear(self.hidden_size, np.prod(output1_shape))
         self.activation1_2 = nn.Softmax(dim=1)
-        self.activation2_1 = nn.ELU()
-
-        self.layer2_1 = nn.Linear(np.prod(input_shape), hidden_n, bias=True)
-        self.layer2_2 = nn.Linear(hidden_n, 1, bias=False)
+        # Value head
+        self.layer2_1 = nn.Linear(np.prod(input_shape), self.hidden_size)
+        self.activation2_1 = nn.ReLU()
+        self.layer2_2 = nn.Linear(self.hidden_size, 1)
 
     def forward(self, x):
-        x = torch.reshape(x, (-1, ) + (np.prod(self.input_shape),))  # Flatten
-        policy = F.relu(self.layer1_1(x))
+        x_flat = x.view((-1, ) + (np.prod(self.input_shape),) )  # Flatten
+        # Policy head
+        policy = self.activation1_1(self.layer1_1(x_flat))
         policy = self.activation1_2(self.layer1_2(policy))
-        policy = torch.reshape(policy, (-1,) + self.output1_shape)
+        policy = torch.reshape(policy, (-1,) + self.output1_shape)  # Residual connection
+        # Value head
+        value = self.activation2_1(self.layer2_1(x_flat))
+        value = self.layer2_2(value)
+        return [policy, value]
+
+hidden_shape = (3,3)
+"""
+import hiddenlayer as hl
+
+transforms = [ hl.transforms.Prune('Constant') ] # Removes Constant nodes from graph.
+batch = torch.zeros(32,2,2)
+#inter = h_model.forward(batch)
+
+graph = hl.build_graph(f_model, batch, transforms=transforms)
+graph.theme = hl.graph.THEMES['blue'].copy()
+graph.save('rnn_hiddenlayer', format='png')
+"""
+
+lr_list = torch.linspace(0, -3, 5)
+lr_list = 10**lr_list
+
+min_vals = []
+for lr in lr_list:
+    f_model = dummy_networkF(hidden_shape, action_size, 64)
+    g_model = dummy_networkG(hidden_shape, hidden_shape, 64)
+    h_model = dummy_networkH((past_obs,) + obs_size, hidden_shape, 64)
+    writer = SummaryWriter()
+    trainer = model_trainer(writer, EX_server, experience_settings, training_settings, MCTS_settings)
+    trainer.lr_init = lr
+    trainer.train(f_model, g_model, h_model)
 
 
-        value = F.relu(self.layer2_1(x))
-        value2 = F.relu(value)
-        return [policy, value2]
 
-
-f_model = dummy_networkF(obs_size, action_size) #ResNet(64, 64, 9, (action_size[0], ), block=ResNetBasicBlock, deepths=[1])
-g_model = dummy_networkG(obs_size, obs_size)#ResNet(64, 64, 9, (64, 3, 3), block=ResNetBasicBlock, deepths=[1])
-h_model = dummy_networkH((past_obs,) + obs_size, obs_size)#ConvResNet(obs_size, obs_size)
-trainer.train(f_model, g_model, h_model)

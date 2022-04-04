@@ -7,25 +7,31 @@ Created on Sat Nov 23 16:44:33 2019
 """
 # File for running the entire program
 
-from model.go_model import ResNet, ResNetBasicBlock
-from MCTS.MCTS2 import sim_games
-from tools.training_functions import save_model, load_latest_model, model_trainer
+from go_model import ResNet, ResNetBasicBlock
+from game_functions import sim_games
+from training_functions import save_model, load_latest_model, model_trainer
+from storage_functions import experience_replay_server
+from models import dummy_networkF, dummy_networkG, dummy_networkH
+import gym
+import hyperparameters as conf
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
-from tools.elo import elo_league
 
 if __name__ == '__main__':
     def resnet40(in_channels, filter_size=128, board_size=9, deepths=[19]):
         return ResNet(in_channels, filter_size, board_size, block=ResNetBasicBlock, deepths=deepths)
 
-
-    f_model = # Model for predicting value (v) and policy (p)
-    g_model = # Model for predicting hidden state (S)
-    h_model = # Model for converting environment state to hidden state
-
-    elo_league = elo_league()
-
+    # Get configs
+    MuZero_settings = conf.MuZero_settings
+    experience_settings = conf.experience_settings
+    MCTS_settings = conf.MCTS_settings
+    training_settings = conf.training_settings
+    # Construct networks
+    hidden_shape = MCTS_settings["hidden_S_size"]
+    f_model = dummy_networkF(hidden_shape, MCTS_settings["action_size"], 32)  # Model for predicting value (v) and policy (p)
+    g_model = dummy_networkG(hidden_shape, hidden_shape, 32)  # Model for predicting hidden state (S)
+    h_model = dummy_networkH((experience_settings["past_obs"],) + MCTS_settings["observation_size"], hidden_shape, 32)  # Model for converting environment state to hidden state
 
     # GPU things
     cuda = torch.cuda.is_available()
@@ -34,69 +40,34 @@ if __name__ == '__main__':
         torch.set_default_tensor_type("torch.cuda.FloatTensor")
     else:
         torch.set_default_tensor_type("torch.FloatTensor")
-
-    ## Load model if one exists, else define a new
-    writer = SummaryWriter()
-    best_model = load_latest_model()
-    training_model = load_latest_model()
-
-    if (best_model == None):
-        best_model = resnet40(17, 128, board_size=board_size)
-        save_model(best_model)
-        training_model = load_latest_model()
-
     if cuda:
-        best_model.cuda()
-        training_model.cuda()
-    dummy_model = resnet40(17, 128, board_size=board_size) # TODO clean this mess up
-    trainer = model_trainer(writer, MCTS_settings, training_settings, dummy_model)
+        f_model.cuda()
+        g_model.cuda()
+        h_model.cuda()
 
-    ## define variables to be used
-    v_resign = float("-inf")
+    # Construct model trainer and experience storage
+    writer = SummaryWriter()
+    ER = experience_replay_server(experience_settings, MCTS_settings)
+    ER_Q = ER.get_Q()
+    trainer = model_trainer(writer, ER, experience_settings, training_settings, MCTS_settings)
+    env_maker = lambda: gym.make("CartPole-v1")  # Function for creating environment. Needs to create seperate env for each worker
+
+    # define variables to be used
     loop_counter = 1
     training_counter = 0
-
-    ## Running loop
+    # Running loop
     while True:
         print("Beginning loop", loop_counter)
         print("Beginning self-play")
-        ## Generate new data for training
+        # Generate new data for training
         with torch.no_grad():
-            v_resign = sim_games(N_training_games,
-                                 best_model,
-                                 v_resign,
-                                 MCTS_settings)
-
-        writer.add_scalar('v_resign', v_resign, loop_counter)
+            sim_games(env_maker, f_model, g_model, h_model, ER_Q, MCTS_settings, MuZero_settings)
 
         print("Begin training")
-        ## Now train model
+        # Now train model
         training_model = trainer.train(training_model)
 
-        print("Begin evaluation")
-        ## Evaluate training model against best model
-        # Below are the needed functions
-        best_model.eval()
-        training_model.eval()
-        with torch.no_grad():
-            scores = sim_games(N_duel_games,
-                               training_model,
-                               v_resign,
-                               MCTS_settings,
-                               model2=best_model,
-                               duel=True)
-
-        # Find best model
-        # Here the model has to win atleast 60% of the games
-
-        best_model = training_model
-        save_model(best_model)
-
-        new_elo, model_iter_counter = elo_league.common_duel_elo(scores[0] / (scores[1] + scores[0]))
-        elo_league.save_league()
-        print("The score was:")
-        print(scores)
-        print("New elo is: " + str(new_elo))
-        # Store statistics
-        writer.add_scalar('Elo', new_elo, model_iter_counter)
+        #save_model(f_model)
+        #save_model(g_model)
+        #save_model(h_model)
         loop_counter += 1

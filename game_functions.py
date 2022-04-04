@@ -3,19 +3,15 @@ from collections import deque, Counter, defaultdict
 from torch.multiprocessing import Process, Queue, Pipe, Value, Lock, Manager, Pool
 import time
 import queue
-import re
-import os
-import glob
-from tqdm import tqdm
-import sys
 from storage_functions import experience_replay_sender
 from MCTS import state_node, expand_node, backup_node, MCTS
+from tqdm import tqdm
 
 # Import torch things
 import torch
 
 
-def gpu_worker(gpu_Q, MCTS_settings, model1, model2=None):
+def gpu_worker(gpu_Q, input_shape, MCTS_settings, model1, model2=None):
     torch.backends.cudnn.benchmark = True
     with torch.no_grad():
         batch_test_length = 1000
@@ -35,7 +31,7 @@ def gpu_worker(gpu_Q, MCTS_settings, model1, model2=None):
         MCTS_queue = 1
         t = time.time()
         # The +1 next line is to take cases where a small job is submitted
-        batch = torch.empty((n_parallel_explorations * (MCTS_queue + 1),) + (obs_size,))
+        batch = torch.empty((n_parallel_explorations * (MCTS_queue + 1),) + input_shape)
         speed = float("-inf")
 
         while True:
@@ -114,19 +110,20 @@ def h_process(batch, pipe_queue, jobs_indexes, h_model):
         index_start = index_end
 
 
-def sim_game(env, f_g_Q, h_Q, ex_Q, MCTS_settings, MuZero_settings, experience_settings):
+def sim_game(env_maker, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZero_settings, experience_settings):
     # Hyperparameters
     temp_switch = MuZero_settings["temp_switch"]  # Number of turns before other temperature measure is used
     eta_par = MuZero_settings["eta_par"]
     epsilon = MuZero_settings["epsilon"]
     action_size = MCTS_settings["action_size"]
-    ER = experience_replay_sender(ex_Q, experience_settings)
+    ER = experience_replay_sender(EX_Q, experience_settings)
 
     # Define pipe for f-, g-, h-model gpu workers
     f_g_rec, f_g_send = Pipe(False)
     h_rec, h_send = Pipe(False)
 
-    # Start environment
+    # Make environment
+    env = env_maker()
     turns = 0
 
     # Generate root/first node
@@ -182,3 +179,73 @@ def sim_game(env, f_g_Q, h_Q, ex_Q, MCTS_settings, MuZero_settings, experience_s
 
     # Episode is over
     ER.send_episode()
+
+def sim_game_worker(env_maker, f_g_Q, h_Q, EX_Q, lock, game_counter, seed, MCTS_settings, MuZero_settings, experience_settings):
+    np.random.seed(seed)
+    n_games = MuZero_settings["N_training_games"]
+    while True:
+        with lock:
+            game_counter.value += 1
+            val = game_counter.value
+        if not (val > n_games):
+            sim_game(env_maker, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZero_settings, experience_settings)
+        else:
+            return
+
+def sim_games(env_maker, f_model, g_model, h_model, EX_Q, MCTS_settings, MuZero_settings):
+    number_of_processes = MCTS_settings["number_of_threads"]
+    # Function for generating games
+    process_workers = []
+    # This is important for generating a worker with torch support
+    torch.multiprocessing.set_start_method('spawn', force=True)
+    f_model.eval()  # Set model for evaluating
+    g_model.eval()
+    h_model.eval()
+
+    # Make queues for sending data
+    fg_model_Q = Queue()  # For sending board positions to GPU
+    h_model_Q = Queue()  # For sending board positions to GPU
+    conn_rec, conn_send = Pipe(False)
+
+    # Make counter and lock
+    game_counter = Value('i', 0)
+    lock = Lock()
+
+    # Make process for gpu workers
+    process_workers.append(Process(target=gpu_worker, args=(fg_model_Q, MCTS_settings["hidden_S_size"], MCTS_settings, f_model, g_model)))
+    process_workers.append(Process(target=gpu_worker, args=(h_model_Q, MCTS_settings["observation_size"], MCTS_settings, h_model)))
+    # Start gpu and data_loader worker
+    for p in process_workers:
+        p.start()
+    # Construct tasks for workers
+    procs = []
+    torch.multiprocessing.set_start_method('fork', force=True)
+    for i in range(number_of_processes):
+        seed = np.random.randint(int(2 ** 31))
+        procs.append(Process(target=sim_game_worker,
+                             args=(env_maker, fg_model_Q, h_model_Q, EX_Q, lock, game_counter, seed, MCTS_settings)))
+
+    # Begin running games
+    for p in procs:
+        p.start()
+    # Join processes
+
+    # Add a loading bar
+    with tqdm(total=MuZero_settings["N_training_games"]) as pbar:
+        old_iter = 0
+        while True:
+            if conn_rec.poll(1):  # Check if received anything (self play is done)
+                v_resign = conn_rec.recv()  # Receive new v_resign
+                break
+            else:
+                # Update loading bar
+                new_iter = game_counter.value
+                pbar.update(new_iter - old_iter)
+                old_iter = new_iter
+
+    for p in procs:
+        p.join()
+
+    # Close processes
+    for p in process_workers:
+        p.terminate()

@@ -2,7 +2,7 @@ import numpy as np
 from collections import deque, defaultdict
 from multiprocessing import Queue
 #from torch.multiprocessing import Queue
-
+from line_profiler_pycharm import profile
 class experience_replay_server:
     def __init__(self, experience_settings, MCTS_settings):
         self.hist_size = experience_settings["history_size"]  # The number of sequences of frames to store in memory
@@ -15,13 +15,14 @@ class experience_replay_server:
 
         # This will be handled as a circular array,
         #     so the array start can be moved when a new sequence having to reformat the whole array
+        self.N = self.hist_size*self.seq_size
         self.storage = np.empty((self.hist_size,), dtype="object")  # For priority sampling
-        self.game_id = np.empty((self.hist_size * self.seq_size,), dtype="int32")
+        self.game_id = np.empty((self.N,), dtype="int32")
         self.store_id = np.empty((self.hist_size,), dtype="object")  # For retreiving frames across sequences
         for i in range(self.hist_size):
             self.store_id[i] = deque()  # Initiallize to []
         self.next_id = 0  # ID to use for next game
-        self.P = np.zeros((self.hist_size * self.seq_size), dtype="float")  # For priority sampling
+        self.P = np.zeros((self.N), dtype="float")  # For priority sampling
         self.total_store = 0
         self.P_replace_idx = 0
         self.agent_to_game = defaultdict(lambda: None)  # Dictionary to get what the next agent should be working on
@@ -80,6 +81,7 @@ class experience_replay_server:
         self.P_replace_idx = (self.P_replace_idx + 1) % self.hist_size  # sequence to next replace
         self.total_store += 1
 
+    @profile
     def return_batches(self, batch_size, alpha, K):
         # Normalize priority dist
         if alpha != 1:
@@ -104,16 +106,18 @@ class experience_replay_server:
         for i in range(batch_size):
             S, a, r, done, pi, z = self.get_sample(batch_idx[i], K)
             pad_length = self.K - len(z)
+            if pad_length != 0:
+                a = np.pad(a, ((0, pad_length), (0, 0)), mode='constant', constant_values=0)
+                r = np.pad(r, (0, pad_length), mode='constant', constant_values=0)
+                done = np.pad(done, (0, pad_length), mode='constant', constant_values=1)
+                pi = np.pad(pi, ((0, pad_length), (0, 0)), mode='constant', constant_values=0)
+                z = np.pad(z, (0, pad_length), mode='constant', constant_values=0)
+
             S_batch.append(S)
-            a = np.pad(a, ((0, pad_length), (0, 0)), mode='constant', constant_values=0)
             a_batch.append(a)
-            r = np.pad(r, (0, pad_length), mode='constant', constant_values=0)
             r_batch.append(r)
-            done = np.pad(done, (0, pad_length), mode='constant', constant_values=1)
             done_batch.append(done)
-            pi = np.pad(pi, ((0, pad_length), (0, 0)), mode='constant', constant_values=0)
             pi_batch.append(pi)
-            z = np.pad(z, (0, pad_length), mode='constant', constant_values=0)
             z_batch.append(z)
         # Stack batches and send. The format is (B, K, object_shape)
         S_batch = np.stack(S_batch)
@@ -124,24 +128,71 @@ class experience_replay_server:
         z_batch = np.stack(z_batch)
         return S_batch, a_batch, r_batch, done_batch, pi_batch, z_batch, batch_idx, self.P[batch_idx]
 
+    def update_weightings(self, new_weightings, indexes):
+        self.P[indexes] = new_weightings
+
+    def batch_sample(self, batch_idx, K):
+        hist_idx = batch_idx // self.seq_size
+        seq_idx = self.past_obs - 1 + (batch_idx % self.seq_size)
+        seq_idx_end = seq_idx + K
+        sequences = self.storage[hist_idx]
+
+        S_batch = []
+        a_batch = []
+        r_batch = []
+        done_batch = []
+        pi_batch = []
+        z_batch = []
+
+        for seq in sequences:
+            S_array, a_array, r_array, done_array, v_array, pi_array, z_array = seq
+            # Construct batch
+            a = a_array[seq_idx:seq_idx_end]
+            r = r_array[seq_idx:seq_idx_end]
+            done = done_array[seq_idx:seq_idx_end]
+            pi = pi_array[seq_idx:seq_idx_end]
+            z = z_array[seq_idx:seq_idx_end]
+            undershoot = seq_idx + 1 - self.past_obs  # Case where past frames goes back to previous block
+            S = S_array[undershoot:(seq_idx + 1)]
+
+            pad_length = self.K - len(z)
+            if pad_length != 0:
+                a = np.pad(a, ((0, pad_length), (0, 0)), mode='constant', constant_values=0)
+                r = np.pad(r, (0, pad_length), mode='constant', constant_values=0)
+                done = np.pad(done, (0, pad_length), mode='constant', constant_values=1)
+                pi = np.pad(pi, ((0, pad_length), (0, 0)), mode='constant', constant_values=0)
+                z = np.pad(z, (0, pad_length), mode='constant', constant_values=0)
+            S_batch.append(S)
+            a_batch.append(a)
+            r_batch.append(r)
+            done_batch.append(done)
+            pi_batch.append(pi)
+            z_batch.append(z)
+
+        # Stack batches and send. The format is (B, K, object_shape)
+        S_batch = np.stack(S_batch)
+        a_batch = np.stack(a_batch)
+        r_batch = np.stack(r_batch)
+        done_batch = np.stack(done_batch)
+        pi_batch = np.stack(pi_batch)
+        z_batch = np.stack(z_batch)
+
+    @profile
     def get_sample(self, batch_idx, K):
         # Get values from storage
         hist_idx = batch_idx // self.seq_size
-        seq_idx = self.past_obs - 1 + batch_idx % self.seq_size
-
-
+        seq_idx = self.past_obs - 1 + (batch_idx % self.seq_size)
         # Seq start
-        S_array1, a_array1, r_array1, done_array1, v_array1, pi_array1, z_array1 = self.storage[hist_idx]
+        S_array, a_array, r_array, done_array, v_array, pi_array, z_array = self.storage[hist_idx]
         # Construct batch
-        a = a_array1[seq_idx:(seq_idx + K)]
-        r = r_array1[seq_idx:(seq_idx + K)]
-        done = done_array1[seq_idx:(seq_idx + K)]
-        pi = pi_array1[seq_idx:(seq_idx + K)]
-        z = z_array1[seq_idx:(seq_idx + K)]
-
+        a = a_array[seq_idx:(seq_idx + K)]
+        r = r_array[seq_idx:(seq_idx + K)]
+        done = done_array[seq_idx:(seq_idx + K)]
+        pi = pi_array[seq_idx:(seq_idx + K)]
+        z = z_array[seq_idx:(seq_idx + K)]
         undershoot = seq_idx + 1 - self.past_obs  # Case where past frames goes back to previous block
-        S = S_array1[undershoot:(seq_idx+1)]
-        test = 2
+        S = S_array[undershoot:(seq_idx+1)]
+
 
         """ This cannot currently happen
         if undershoot < 0:
@@ -312,3 +363,4 @@ class experience_replay_sender:
         # The z value is added seperatly to avoid copying start_sample
         for j in range(self.past_obs-1):
             self.list_storage[-1].append(z)
+
