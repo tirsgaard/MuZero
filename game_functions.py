@@ -192,7 +192,7 @@ def sim_game_worker(env_maker, f_g_Q, h_Q, EX_Q, lock, game_counter, seed, MCTS_
         else:
             return
 
-def sim_games(env_maker, f_model, g_model, h_model, EX_Q, MCTS_settings, MuZero_settings):
+def sim_games(env_maker, f_model, g_model, h_model, EX_Q, MCTS_settings, MuZero_settings, experience_settings):
     number_of_processes = MCTS_settings["number_of_threads"]
     # Function for generating games
     process_workers = []
@@ -223,7 +223,7 @@ def sim_games(env_maker, f_model, g_model, h_model, EX_Q, MCTS_settings, MuZero_
     for i in range(number_of_processes):
         seed = np.random.randint(int(2 ** 31))
         procs.append(Process(target=sim_game_worker,
-                             args=(env_maker, fg_model_Q, h_model_Q, EX_Q, lock, game_counter, seed, MCTS_settings)))
+                             args=(env_maker, fg_model_Q, h_model_Q, EX_Q, lock, game_counter, seed, MCTS_settings,  MuZero_settings, experience_settings)))
 
     # Begin running games
     for p in procs:

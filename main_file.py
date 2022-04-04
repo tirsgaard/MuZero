@@ -19,8 +19,6 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 if __name__ == '__main__':
-    def resnet40(in_channels, filter_size=128, board_size=9, deepths=[19]):
-        return ResNet(in_channels, filter_size, board_size, block=ResNetBasicBlock, deepths=deepths)
 
     # Get configs
     MuZero_settings = conf.MuZero_settings
@@ -61,7 +59,7 @@ if __name__ == '__main__':
         print("Beginning self-play")
         # Generate new data for training
         with torch.no_grad():
-            sim_games(env_maker, f_model, g_model, h_model, ER_Q, MCTS_settings, MuZero_settings)
+            sim_games(env_maker, f_model, g_model, h_model, ER_Q, MCTS_settings, MuZero_settings, experience_settings)
 
         print("Begin training")
         # Now train model
