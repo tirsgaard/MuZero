@@ -127,7 +127,7 @@ def sim_game(env_maker, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZero_settin
     turns = 0
 
     # Generate root/first node
-    root_node = state_node()
+    root_node = state_node(MCTS_settings["action_size"])
     # Start game
     S_obs = env.reset()
     h_Q.put([S_obs, h_send])  # Get hidden state of observation
