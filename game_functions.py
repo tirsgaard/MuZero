@@ -33,8 +33,8 @@ def gpu_worker(gpu_Q, input_shape, MCTS_settings, model1, model2=None):
         # The +1 next line is to take cases where a small job is submitted
         batch = torch.empty((n_parallel_explorations * (MCTS_queue + 1),) + input_shape)
         speed = float("-inf")
-
         while True:
+
             # Loop to get data
             i = 0
             jobs_indexes = []
@@ -86,6 +86,7 @@ def f_g_process(batch, pipe_queue, jobs_indexes, f_model, g_model):
     u = u.cpu().numpy()
     P = result[0].cpu().numpy()
     v = result[1].cpu().numpy()
+    index_start = 0
     # Send processed jobs to all threads
     for jobs_index in jobs_indexes:
         index_end = index_start + jobs_index
@@ -102,6 +103,7 @@ def h_process(batch, pipe_queue, jobs_indexes, h_model):
     # Process data
     S = h_model.forward(batch)
     S = S.cpu().numpy()
+    index_start = 0
     # Send processed jobs to all threads
     for jobs_index in jobs_indexes:
         index_end = index_start + jobs_index
