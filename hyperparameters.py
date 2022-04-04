@@ -12,7 +12,7 @@ experience_settings = {"history_size": 125*10**3,  # The number of sequences of 
                         "sequence_length": 200,  # The number of frames in each sequence
                         "epsilon": 0.25,  # Distributional value for action selection
                         "n_bootstrap": 10,  # Number of steps forward to bootstrap from
-                        "past_obs": 32,  # Number of past observations to stack. Original Atari was 32
+                        "past_obs": 1,  # Number of past observations to stack. Original Atari was 32
                         "K": 5  # Number of steps to unroll during training. Needed here to determine delay of sending
                    }
 
