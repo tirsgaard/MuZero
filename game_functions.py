@@ -110,13 +110,13 @@ def h_process(batch, pipe_queue, jobs_indexes, h_model):
         index_start = index_end
 
 
-def sim_game(env_maker, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZero_settings, experience_settings):
+def sim_game(env_maker, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZero_settings, experience_settings):
     # Hyperparameters
     temp_switch = MuZero_settings["temp_switch"]  # Number of turns before other temperature measure is used
     eta_par = MuZero_settings["eta_par"]
     epsilon = MuZero_settings["epsilon"]
     action_size = MCTS_settings["action_size"]
-    ER = experience_replay_sender(EX_Q, experience_settings)
+    ER = experience_replay_sender(EX_Q, agent_id, MCTS_settings["gamma"], experience_settings)
 
     # Define pipe for f-, g-, h-model gpu workers
     f_g_rec, f_g_send = Pipe(False)
@@ -188,7 +188,7 @@ def sim_game_worker(env_maker, f_g_Q, h_Q, EX_Q, lock, game_counter, seed, MCTS_
             game_counter.value += 1
             val = game_counter.value
         if not (val > n_games):
-            sim_game(env_maker, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZero_settings, experience_settings)
+            sim_game(env_maker, seed, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZero_settings, experience_settings)
         else:
             return
 
