@@ -14,7 +14,6 @@ import sys
 import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
 import warnings
-from line_profiler_pycharm import profile
 
 def save_model(model):
     subdirectory = "model/saved_models/"
@@ -125,7 +124,6 @@ class model_trainer:
 
         return converted
 
-    @profile
     def train(self, f_model, g_model, h_model):
         f_model.train()
         g_model.train()
