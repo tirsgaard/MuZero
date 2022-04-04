@@ -8,10 +8,10 @@ class state_node:
         self.N_total = 1  # Total times node visited during MCTS
         self.game_over = False  # If game is over
         self.explored = False
-        self.N = np.zeros((action_size,))  # Total times each child node visited during MCTS
-        self.N_inv = np.ones((action_size,))  # Store inverse N for faster calculations
-        self.Q = np.zeros((action_size,))  # Average return observed for state for all actions
-        self.illegal_actions = np.zeros((action_size,))  # If any actions are illegal, default is none
+        self.N = np.zeros(action_size)  # Total times each child node visited during MCTS
+        self.N_inv = np.ones(action_size)  # Store inverse N for faster calculations
+        self.Q = np.zeros(action_size)  # Average return observed for state for all actions
+        self.illegal_actions = np.zeros(action_size)  # If any actions are illegal, default is none
 
     def explore(self, S, P, r, v):
         self.r = r  # reward from travelling from parent to this node
