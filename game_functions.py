@@ -4,7 +4,7 @@ from torch.multiprocessing import Process, Queue, Pipe, Value, Lock, Manager, Po
 import time
 import queue
 from storage_functions import experience_replay_sender
-from MCTS import state_node, expand_node, backup_node, MCTS
+from MCTS import state_node, expand_node, backup_node, MCTS, generate_root
 from tqdm import tqdm
 
 # Import torch things
@@ -15,8 +15,6 @@ def gpu_worker(gpu_Q, input_shape, MCTS_settings, model1, model2=None):
     torch.backends.cudnn.benchmark = True
     with torch.no_grad():
         batch_test_length = 1000
-        action_size = MCTS_settings["action_size"]
-        obs_size = MCTS_settings["observation_size"]
         n_parallel_explorations = MCTS_settings["n_parallel_explorations"]
         cuda = torch.cuda.is_available()
         num_eval = 0
@@ -34,7 +32,6 @@ def gpu_worker(gpu_Q, input_shape, MCTS_settings, model1, model2=None):
         batch = torch.empty((n_parallel_explorations * (MCTS_queue + 1),) + input_shape)
         speed = float("-inf")
         while True:
-
             # Loop to get data
             i = 0
             jobs_indexes = []
@@ -73,7 +70,7 @@ def gpu_worker(gpu_Q, input_shape, MCTS_settings, model1, model2=None):
                 f.close()
 
                 MCTS_queue += 1 - 2 * calibration_done  # The calibration is for going back to optimal size
-                batch = torch.empty((n_parallel_explorations * (MCTS_queue + 1),) + (obs_size,))
+                batch = torch.empty((n_parallel_explorations * (MCTS_queue + 1),) + input_shape)
                 num_eval = 0
 
 
@@ -118,6 +115,7 @@ def sim_game(env_maker, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZero_settin
     eta_par = MuZero_settings["eta_par"]
     epsilon = MuZero_settings["epsilon"]
     action_size = MCTS_settings["action_size"]
+    n_actions = np.prod(action_size)
     ER = experience_replay_sender(EX_Q, agent_id, MCTS_settings["gamma"], experience_settings)
 
     # Define pipe for f-, g-, h-model gpu workers
@@ -127,30 +125,23 @@ def sim_game(env_maker, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZero_settin
     # Make environment
     env = env_maker()
     turns = 0
-
-    # Generate root/first node
-    root_node = state_node(MCTS_settings["action_size"])
     # Start game
     S_obs = env.reset()
-    h_Q.put([S_obs, h_send])  # Get hidden state of observation
-    S = h_rec.recv()
-    a = 0  # Dummy action
-    stored_jobs = ([S, [], [], root_node, a])
-    S_array, u_array, P_array, v_array = expand_node(stored_jobs, f_g_Q, f_g_send, f_g_rec, MCTS_settings)
-    S = backup_node(stored_jobs, S_array, P_array, v_array, MCTS_settings)
-
     # Loop over all turns in environment
     while True:
         turns += 1
-        root_node.set_illegal(env.illegal())
+        #env.render()
+        # Generate new tree, to throw away old values
+        root_node = generate_root(S_obs, h_Q, f_g_Q, h_send, h_rec, f_g_send, f_g_rec, MCTS_settings)
+        #root_node.set_illegal(env.illegal())
         if (turns <= temp_switch):
             # Case where early temperature is used
             # Simulate MCTS
             root_node = MCTS(root_node, f_g_Q, MCTS_settings)
             # Compute action distribution from policy
-            pi_legal = root_node.N / root_node.N_total
+            pi_legal = root_node.N / (root_node.N_total-1)  # -1 to not count exploration of the root-node itself
             # Selecet action
-            action = np.random.choice(action_size, size=1, p=pi_legal)[0]
+            action = np.random.choice(n_actions, size=1, p=pi_legal)[0]
         else:
             # Case where later temperature is used
             # Get noise
@@ -165,22 +156,17 @@ def sim_game(env_maker, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZero_settin
 
             # Pick move
             action = np.argmax(root_node.N)
-        Q = root_node.Q  # Store estimated values (G)
+
         # Pick move
         root_node = root_node.action_edges[action]
         S_new_obs, r, done, info = env.step(action)
         # Save Data
-        ER.store([S_obs, S_new_obs, action, r, done, pi_legal, root_node.v], done)
+        ER.store(S_obs, action, r, done, root_node.v, pi_legal)
         S_obs = S_new_obs
-
-        h_Q.put([S_obs, h_send])
-        S = h_rec.recv()
         if done:
             # Check for termination of environment
+            env.close()
             break
-
-    # Episode is over
-    ER.send_episode()
 
 def sim_game_worker(env_maker, f_g_Q, h_Q, EX_Q, lock, game_counter, seed, MCTS_settings, MuZero_settings, experience_settings):
     np.random.seed(seed)
@@ -214,7 +200,8 @@ def sim_games(env_maker, f_model, g_model, h_model, EX_Q, MCTS_settings, MuZero_
     lock = Lock()
 
     # Make process for gpu workers
-    process_workers.append(Process(target=gpu_worker, args=(fg_model_Q, MCTS_settings["hidden_S_size"], MCTS_settings, f_model, g_model)))
+    hidden_input_size = hidden_input_size = (MCTS_settings["action_size"][0]+1,) + MCTS_settings["hidden_S_size"]
+    process_workers.append(Process(target=gpu_worker, args=(fg_model_Q, hidden_input_size, MCTS_settings, f_model, g_model)))
     process_workers.append(Process(target=gpu_worker, args=(h_model_Q, MCTS_settings["observation_size"], MCTS_settings, h_model)))
     # Start gpu and data_loader worker
     for p in process_workers:
@@ -236,14 +223,15 @@ def sim_games(env_maker, f_model, g_model, h_model, EX_Q, MCTS_settings, MuZero_
     with tqdm(total=MuZero_settings["N_training_games"]) as pbar:
         old_iter = 0
         while True:
-            if conn_rec.poll(1):  # Check if received anything (self play is done)
-                v_resign = conn_rec.recv()  # Receive new v_resign
-                break
-            else:
+            if any([p.is_alive() for p in procs]):  # Check if any processes is alive
                 # Update loading bar
                 new_iter = game_counter.value
                 pbar.update(new_iter - old_iter)
                 old_iter = new_iter
+                # Sleep
+                time.sleep(1)
+            else:
+                break
 
     for p in procs:
         p.join()

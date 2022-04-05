@@ -360,4 +360,3 @@ class experience_replay_sender:
         # The z value is added seperatly to avoid copying start_sample
         for j in range(self.past_obs-1):
             self.list_storage[-1].append(z)
-

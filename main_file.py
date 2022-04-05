@@ -26,7 +26,10 @@ if __name__ == '__main__':
     MCTS_settings = conf.MCTS_settings
     training_settings = conf.training_settings
     # Construct networks
+    import numpy as np
+
     hidden_shape = MCTS_settings["hidden_S_size"]
+    action_size = MCTS_settings["action_size"]
     f_model = dummy_networkF(hidden_shape, MCTS_settings["action_size"], 32)  # Model for predicting value (v) and policy (p)
     g_model = dummy_networkG(hidden_shape, hidden_shape, 32)  # Model for predicting hidden state (S)
     h_model = dummy_networkH((experience_settings["past_obs"],) + MCTS_settings["observation_size"], hidden_shape, 32)  # Model for converting environment state to hidden state
