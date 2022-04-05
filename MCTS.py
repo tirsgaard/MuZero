@@ -157,7 +157,7 @@ def expand_node(stored_jobs, f_g_Q, f_g_send, f_g_rec, MCTS_settings):
     a_array = np.empty((len(stored_jobs), ), dtype=int)
 
     k = 0
-    for S, current_path, new_go_state, current_path, current_node, a_chosen in stored_jobs:
+    for S, current_path, current_node, new_node, a_chosen in stored_jobs:
         S_array[k] = S
         a_array[k] = a_chosen
         k += 1
@@ -177,7 +177,7 @@ def backup_node(stored_jobs, S_array, r_array, P_array, v_array, MCTS_settings):
 
     # Expand tree and backtrack each node in queue
     k = 0
-    for S, new_go_state, current_path, leaf_node, a_chosen in stored_jobs:
+    for S, current_path, current_node, leaf_node, a_chosen in stored_jobs:
         P = P_array[k]
         r = r_array[k][0]
         S = S_array[k]
