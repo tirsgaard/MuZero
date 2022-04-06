@@ -140,9 +140,9 @@ class model_trainer:
         return converted
 
     def train(self):
-        self.f_model.train()
-        self.g_model.train()
-        self.h_model.train()
+        self.f_model.to(self.device).train()
+        self.g_model.to(self.device).train()
+        self.h_model.to(self.device).train()
 
 
         length_training = self.num_epochs
