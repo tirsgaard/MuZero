@@ -113,6 +113,7 @@ class model_trainer:
         self.hidden_S_size = MCTS_settings["hidden_S_size"]
         self.action_size = MCTS_settings["action_size"]
         self.wr_Q = MCTS_settings["Q_writer"]
+        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         self.training_counter = 0
 
         # Check for cuda
@@ -134,7 +135,7 @@ class model_trainer:
         # Convert to cuda if GPU support
         if self.cuda:
             for element in converted:
-                element.cuda()
+                element.to(self.device)
 
         return converted
 
