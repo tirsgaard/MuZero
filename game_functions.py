@@ -173,8 +173,8 @@ def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZe
         S_obs = S_new_obs
         if done:
             # Check for termination of environment
-            wr_Q.put(['environment/steps', turns, game_id])
-            wr_Q.put(['environment/total_reward', total_R, game_id])
+            wr_Q.put(['scalar', 'environment/steps', turns, game_id])
+            wr_Q.put(['scalar', 'environment/total_reward', total_R, game_id])
             env.close()
             break
 

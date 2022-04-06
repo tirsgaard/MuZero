@@ -192,19 +192,19 @@ class model_trainer:
             if self.training_counter % 10 == 1:
                 try:
                     #self.writer.flush()
-                    self.wr_Q.put(['Output/v', v_batch.detach(), self.training_counter])
-                    self.wr_Q.put(['Output/P', P_batch.detach(), self.training_counter])
-                    self.wr_Q.put(['Output/r', r_batch.detach(), self.training_counter])
+                    self.wr_Q.put(['dist', 'Output/v', v_batch.detach(), self.training_counter])
+                    self.wr_Q.put(['dist', 'Output/P', P_batch.detach(), self.training_counter])
+                    self.wr_Q.put(['dist', 'Output/r', r_batch.detach(), self.training_counter])
 
-                    self.wr_Q.put(['data/u', u_batch.detach(), self.training_counter])
-                    self.wr_Q.put(['data/z', z_batch.detach(), self.training_counter])
-                    self.wr_Q.put(['data/Pi', pi_batch.detach(), self.training_counter])
+                    self.wr_Q.put(['dist', 'data/u', u_batch.detach(), self.training_counter])
+                    self.wr_Q.put(['dist', 'data/z', z_batch.detach(), self.training_counter])
+                    self.wr_Q.put(['dist', 'data/Pi', pi_batch.detach(), self.training_counter])
 
-                    self.wr_Q.put(['Total_loss/train', loss.detach(), self.training_counter])
-                    self.wr_Q.put(['Reward_loss/train', r_loss.detach(), self.training_counter])
-                    self.wr_Q.put(['Value_loss/train', v_loss.detach(), self.training_counter])
-                    self.wr_Q.put(['Policy_loss/train', P_loss.detach(), self.training_counter])
-                    self.wr_Q.put(['learning_rate', self.scheduler.get_last_lr()[0], self.training_counter])
+                    self.wr_Q.put(['scalar', 'Total_loss/train', loss.mean().detach(), self.training_counter])
+                    self.wr_Q.put(['scalar', 'Reward_loss/train', r_loss.mean().detach(), self.training_counter])
+                    self.wr_Q.put(['scalar', 'Value_loss/train', v_loss.mean().detach(), self.training_counter])
+                    self.wr_Q.put(['dist', 'Policy_loss/train', P_loss.detach(), self.training_counter])
+                    self.wr_Q.put(['scalar', 'learning_rate', self.scheduler.get_last_lr()[0], self.training_counter])
                 except:
                     return
             self.training_counter += 1
@@ -226,7 +226,14 @@ def writer_worker(wr_Q):
     while True:
         # Empty queue
         while not wr_Q.empty():
-            name, value, index = wr_Q.get()
-            writer.add_histogram(name, value, index)
+            type, name, value, index = wr_Q.get()
+            if type == 'scalar':
+                writer.add_scalar(name, value, index)
+            elif type == 'dist':
+                writer.add_histogram(name, value, index)
+            else:
+                print(type)
+                raise TypeError
+
 
         # Train
