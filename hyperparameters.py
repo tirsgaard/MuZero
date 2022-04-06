@@ -1,6 +1,5 @@
 
 
-
 MuZero_settings = {"N_training_games": 2000,  # Total number of games to run pr. training loop
                     "temp_switch": 16,  # Number of turns before other temperature measure is used
                     "eta_par": 0.03,  # Distributional value for action selection
@@ -28,9 +27,9 @@ MCTS_settings = {"n_parallel_explorations": 2,  # Number of pseudo-parrallel run
                  "c2": 19652,
                  "gamma": 0.997}  # parameter for pUCT selection
 
-training_settings = {"train_batch_size": 512,  # Batch size on GPU during training
-                     "num_epochs": 3200,  # Maximum length of training epoch before break
-                     "lr_init": 0.05,  # Original Atari rate was 0.05
+training_settings = {"train_batch_size": 32,  # Batch size on GPU during training
+                     "num_epochs": 100,  # Maximum length of training epoch before break
+                     "lr_init": (10**-2)*125*10**3,  # Original Atari rate was 0.05
                      "lr_decay_rate": 0.1,
                      "lr_decay_steps": 400e3,  # Original Atari was 350e3
                      "alpha": 1,

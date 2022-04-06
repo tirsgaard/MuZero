@@ -15,7 +15,7 @@ class state_node:
         self.illegal_actions = np.zeros(action_size)  # If any actions are illegal, default is none
 
     def explore(self, S, P, r, v):
-        self.r = r  # reward from travelling from parent to this node
+        self.r = r  # Reward from travelling from parent to this node
         self.S = S  # Dynamic state
         self.U = P  # Exploration values
         self.P = P  # Exploration values
@@ -49,12 +49,12 @@ class min_max_vals:
 def generate_root(S_obs, h_Q, f_g_Q, h_send, h_rec, f_g_send, f_g_rec, MCTS_settings):
     root_node = state_node(MCTS_settings["action_size"])
     h_Q.put([S_obs[None], h_send])  # Get hidden state of observation
-    S = h_rec.recv()[0]
-    a = 0  # Dummy action
-    stored_jobs = [[S, [], [], root_node, a]]
-    S_array, u_array, P_array, v_array = expand_node(stored_jobs, f_g_Q, f_g_send, f_g_rec, MCTS_settings)
-    normalizer = min_max_vals() # This will be thrown away, as the values found here are not used
-    backup_node(stored_jobs, S_array, u_array, P_array, v_array, normalizer, MCTS_settings)
+    S, P, v = h_rec.recv()
+    #stored_jobs = [[S, [], [], root_node, a]]
+    #S_array, u_array, P_array, v_array = expand_node(stored_jobs, f_g_Q, f_g_send, f_g_rec, MCTS_settings)
+    #normalizer = min_max_vals() # This will be thrown away, as the values found here are not used
+    #backup_node(stored_jobs, S, u_array, P, v, normalizer, MCTS_settings)
+    root_node.explore(S, P, 0, v)
     return root_node
 
 def node_back_up(node_path, v, gamma, n_vl, normalizer):

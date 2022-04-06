@@ -3,11 +3,11 @@ from collections import deque, defaultdict
 from multiprocessing import Queue
 #from torch.multiprocessing import Queue
 class experience_replay_server:
-    def __init__(self, experience_settings, MCTS_settings):
+    def __init__(self, ex_Q, experience_settings, MCTS_settings):
         self.hist_size = experience_settings["history_size"]  # The number of sequences of frames to store in memory
         self.seq_size = experience_settings["sequence_length"]  # The number of frames in each sequence
         self.K = experience_settings["K"]  # Number of steps to unroll during training. Needed here to determine delay of sending
-        self.ex_Q = Queue()  # For receiving jobs
+        self.ex_Q = ex_Q  # For receiving jobs
         self.action_size = MCTS_settings["action_size"]
         self.obs_size = MCTS_settings["observation_size"]
         self.past_obs = experience_settings["past_obs"]  # Number of past observations to stack
@@ -32,6 +32,7 @@ class experience_replay_server:
 
     def recv_store(self):
         S_array, a_array, r_array, done_array, v_array, pi_array, z_array, agent_id = self.ex_Q.get(True, None)
+        a_array = a_array.astype(np.int64)  # Easier to convert here
         #  Convert agent id into game id
         new_game = False
         game_id = self.agent_to_game[agent_id]
@@ -78,7 +79,7 @@ class experience_replay_server:
         self.storage[self.P_replace_idx] = [S_array, a_array, r_array, done_array, v_array, pi_array, z_array]
         # Move array start
         self.P_replace_idx = (self.P_replace_idx + 1) % self.hist_size  # sequence to next replace
-        self.total_store += 1
+        self.total_store += val_len # Update number of stored total
 
     def return_batches(self, batch_size, alpha, K):
         # Normalize priority dist
@@ -105,7 +106,7 @@ class experience_replay_server:
             S, a, r, done, pi, z = self.get_sample(batch_idx[i], K)
             pad_length = self.K - len(z)
             if pad_length != 0:
-                a = np.pad(a, ((0, pad_length), (0, 0)), mode='constant', constant_values=0)
+                a = np.pad(a, ((0, pad_length)), mode='constant', constant_values=0)
                 r = np.pad(r, (0, pad_length), mode='constant', constant_values=0)
                 done = np.pad(done, (0, pad_length), mode='constant', constant_values=1)
                 pi = np.pad(pi, ((0, pad_length), (0, 0)), mode='constant', constant_values=0)

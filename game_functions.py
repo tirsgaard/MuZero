@@ -11,7 +11,7 @@ from tqdm import tqdm
 import torch
 
 
-def gpu_worker(gpu_Q, input_shape, MCTS_settings, model1, model2=None):
+def gpu_worker(gpu_Q, input_shape, MCTS_settings, model, f_model, use_g_model):
     torch.backends.cudnn.benchmark = True
     with torch.no_grad():
         batch_test_length = 1000
@@ -50,12 +50,12 @@ def gpu_worker(gpu_Q, input_shape, MCTS_settings, model1, model2=None):
                     if i != 0:
                         break
             # Evaluate and send jobs
-            if model2 != None:
+            if use_g_model:
                 # Case where worker uses f and g model
-                f_g_process(batch, pipe_queue, jobs_indexes, model1, model2)
+                f_g_process(batch, pipe_queue, jobs_indexes, model, f_model)
             else:
-                # Case where worker uses h-model
-                h_process(batch, pipe_queue, jobs_indexes, model1)
+                # Case where worker uses f and h model
+                h_f_process(batch, pipe_queue, jobs_indexes, model, f_model)
 
             # Update calibration
             if ((num_eval % (batch_test_length + 1)) == 0) and (not calibration_done):
@@ -74,7 +74,7 @@ def gpu_worker(gpu_Q, input_shape, MCTS_settings, model1, model2=None):
                 num_eval = 0
 
 
-def f_g_process(batch, pipe_queue, jobs_indexes, f_model, g_model):
+def f_g_process(batch, pipe_queue, jobs_indexes, g_model, f_model):
     # Function for processing jobs for booth dynamic (g) and value (f) evaluation model
     # Process data
     S, u = g_model.forward(batch)
@@ -95,26 +95,32 @@ def f_g_process(batch, pipe_queue, jobs_indexes, f_model, g_model):
         index_start = index_end
 
 
-def h_process(batch, pipe_queue, jobs_indexes, h_model):
+def h_f_process(batch, pipe_queue, jobs_indexes, h_model, f_model):
     # Function for processing jobs for booth dynamic (g) and value (f) evaluation model
     # Process data
     S = h_model.forward(batch)
+    result = f_model.forward(S)
     S = S.cpu().numpy()
+    P = result[0].cpu().numpy()
+    v = result[1].cpu().numpy()
     index_start = 0
     # Send processed jobs to all threads
     for jobs_index in jobs_indexes:
         index_end = index_start + jobs_index
         S_indexed = S[index_start:index_end]
-        pipe_queue.popleft().send([S_indexed])
+        P_indexed = P[index_start:index_end]
+        v_indexed = v[index_start:index_end]
+        pipe_queue.popleft().send([S_indexed, P_indexed, v_indexed])
         index_start = index_end
 
 
-def sim_game(env_maker, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZero_settings, experience_settings):
+def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZero_settings, experience_settings):
     # Hyperparameters
     temp_switch = MuZero_settings["temp_switch"]  # Number of turns before other temperature measure is used
     eta_par = MuZero_settings["eta_par"]
     epsilon = MuZero_settings["epsilon"]
     action_size = MCTS_settings["action_size"]
+    wr_Q = MCTS_settings["Q_writer"]
     n_actions = np.prod(action_size)
     ER = experience_replay_sender(EX_Q, agent_id, MCTS_settings["gamma"], experience_settings)
 
@@ -124,6 +130,7 @@ def sim_game(env_maker, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZero_settin
 
     # Make environment
     env = env_maker()
+    total_R = 0
     turns = 0
     # Start game
     S_obs = env.reset()
@@ -160,11 +167,14 @@ def sim_game(env_maker, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZero_settin
         # Pick move
         root_node = root_node.action_edges[action]
         S_new_obs, r, done, info = env.step(action)
+        total_R += r
         # Save Data
         ER.store(S_obs, action, r, done, root_node.v, pi_legal)
         S_obs = S_new_obs
         if done:
             # Check for termination of environment
+            wr_Q.put(['environment/steps', turns, game_id])
+            wr_Q.put(['environment/total_reward', total_R, game_id])
             env.close()
             break
 
@@ -176,7 +186,7 @@ def sim_game_worker(env_maker, f_g_Q, h_Q, EX_Q, lock, game_counter, seed, MCTS_
             game_counter.value += 1
             val = game_counter.value
         if not (val > n_games):
-            sim_game(env_maker, seed, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZero_settings, experience_settings)
+            sim_game(env_maker, val, seed, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZero_settings, experience_settings)
         else:
             return
 
@@ -191,8 +201,8 @@ def sim_games(env_maker, f_model, g_model, h_model, EX_Q, MCTS_settings, MuZero_
     h_model.eval()
 
     # Make queues for sending data
-    fg_model_Q = Queue()  # For sending board positions to GPU
-    h_model_Q = Queue()  # For sending board positions to GPU
+    gf_model_Q = Queue()  # For sending board positions to GPU
+    hf_model_Q = Queue()  # For sending board positions to GPU
     conn_rec, conn_send = Pipe(False)
 
     # Make counter and lock
@@ -201,8 +211,8 @@ def sim_games(env_maker, f_model, g_model, h_model, EX_Q, MCTS_settings, MuZero_
 
     # Make process for gpu workers
     hidden_input_size = hidden_input_size = (MCTS_settings["action_size"][0]+1,) + MCTS_settings["hidden_S_size"]
-    process_workers.append(Process(target=gpu_worker, args=(fg_model_Q, hidden_input_size, MCTS_settings, f_model, g_model)))
-    process_workers.append(Process(target=gpu_worker, args=(h_model_Q, MCTS_settings["observation_size"], MCTS_settings, h_model)))
+    process_workers.append(Process(target=gpu_worker, args=(gf_model_Q, hidden_input_size, MCTS_settings, g_model, f_model, True)))
+    process_workers.append(Process(target=gpu_worker, args=(hf_model_Q, MCTS_settings["observation_size"], MCTS_settings, h_model, f_model, False)))
     # Start gpu and data_loader worker
     for p in process_workers:
         p.start()
@@ -212,7 +222,7 @@ def sim_games(env_maker, f_model, g_model, h_model, EX_Q, MCTS_settings, MuZero_
     for i in range(number_of_processes):
         seed = np.random.randint(int(2 ** 31))
         procs.append(Process(target=sim_game_worker,
-                             args=(env_maker, fg_model_Q, h_model_Q, EX_Q, lock, game_counter, seed, MCTS_settings,  MuZero_settings, experience_settings)))
+                             args=(env_maker, gf_model_Q, hf_model_Q, EX_Q, lock, game_counter, seed, MCTS_settings,  MuZero_settings, experience_settings)))
 
     # Begin running games
     for p in procs:
