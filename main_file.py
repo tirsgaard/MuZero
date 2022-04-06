@@ -40,9 +40,7 @@ if __name__ == '__main__':
     g_model = dummy_networkG(hidden_input_size, (1,) + hidden_shape, 32)  # Model for predicting hidden state (S)
     h_model = dummy_networkH((experience_settings["past_obs"],) + MCTS_settings["observation_size"], hidden_shape,
                              32)  # Model for converting environment state to hidden state
-    f_model.share_memory()
-    g_model.share_memory()
-    h_model.share_memory()
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     # GPU things
     cuda = torch.cuda.is_available()
@@ -52,9 +50,12 @@ if __name__ == '__main__':
     else:
         torch.set_default_tensor_type("torch.FloatTensor")
     if cuda:
-        f_model.cuda()
-        g_model.cuda()
-        h_model.cuda()
+        f_model.to(device)
+        g_model.to(device)
+        h_model.to(device)
+    f_model.share_memory()
+    g_model.share_memory()
+    h_model.share_memory()
 
     # Function for creating environment. Needs to create seperate env for each worker
     env_maker = lambda: gym.make("CartPole-v1")
