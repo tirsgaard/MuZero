@@ -219,9 +219,10 @@ def train_ex_worker(ex_Q, f_model, g_model, h_model, experience_settings, traini
 
 def writer_worker(wr_Q):
     writer = SummaryWriter()
-    f = open("debug.txt", "a")
+
 
     while True:
+        f = open("debug.txt", "a")
         # Empty queue
         while not wr_Q.empty():
             type, name, value, index = wr_Q.get()
@@ -233,5 +234,9 @@ def writer_worker(wr_Q):
                 writer.add_histogram(name, value, index)
             else:
                 print(type)
-                f.close()
+
                 raise TypeError
+
+        print("sleeping", file=f)
+        f.close()
+        time.sleep(10)
