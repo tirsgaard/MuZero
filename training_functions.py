@@ -219,19 +219,19 @@ def train_ex_worker(ex_Q, f_model, g_model, h_model, experience_settings, traini
 
 def writer_worker(wr_Q):
     writer = SummaryWriter()
+    f = open("debug.txt", "a")
+
     while True:
         # Empty queue
         while not wr_Q.empty():
             type, name, value, index = wr_Q.get()
             if type == 'scalar':
-                print(value)
+                print(value, file=f)
                 writer.add_scalar(name, value, index)
             elif type == 'dist':
-                print(value)
+                print(value, file=f)
                 writer.add_histogram(name, value, index)
             else:
                 print(type)
+                f.close()
                 raise TypeError
-
-
-        # Train
