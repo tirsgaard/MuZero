@@ -131,12 +131,7 @@ class model_trainer:
     def convert_torch(self, tensors):
         converted = []
         for tensor in tensors:
-            converted.append(torch.from_numpy(tensor))
-        # Convert to cuda if GPU support
-        if self.cuda:
-            for element in converted:
-                element.to(self.device)
-
+            converted.append(torch.from_numpy(tensor).to(self.device))
         return converted
 
     def train(self):

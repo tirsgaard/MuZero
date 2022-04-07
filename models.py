@@ -3,7 +3,11 @@ from functools import partial
 import torch
 import numpy as np
 import torch.nn.functional as F
-
+cuda = torch.cuda.is_available()
+if cuda:
+    torch.set_default_tensor_type("torch.cuda.FloatTensor")
+else:
+    torch.set_default_tensor_type("torch.FloatTensor")
 
 def stack_a(S, a, hidden_shape, action_size):
     a_onehot = np.zeros(action_size + hidden_shape)
