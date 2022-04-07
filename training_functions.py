@@ -168,7 +168,7 @@ class model_trainer:
                 Sa_batch = stack_a_torch(new_S, a_batch[:, k], self.hidden_S_size, self.action_size)
                 new_S, r_batch = self.g_model.forward(Sa_batch)
 
-                p_vals.append(torch.abs(v_batch.squeeze(dim=1) - z_batch[:, k]).detach().numpy())  # For importance weighting
+                p_vals.append(torch.abs(v_batch.squeeze(dim=1) - z_batch[:, k]).detach().cpu().numpy())  # For importance weighting
                 P_batches.append(P_batch)
                 v_batches.append(v_batch)
                 r_batches.append(r_batch)
