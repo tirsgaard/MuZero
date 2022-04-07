@@ -188,19 +188,19 @@ class model_trainer:
             if self.training_counter % 10 == 1:
                 try:
                     #self.writer.flush()
-                    self.wr_Q.put(['dist', 'Output/v', v_batch.detach(), self.training_counter])
-                    self.wr_Q.put(['dist', 'Output/P', P_batch.detach(), self.training_counter])
-                    self.wr_Q.put(['dist', 'Output/r', r_batch.detach(), self.training_counter])
+                    self.wr_Q.put(['dist', 'Output/v', v_batch.detach().cpu(), self.training_counter])
+                    self.wr_Q.put(['dist', 'Output/P', P_batch.detach().cpu(), self.training_counter])
+                    self.wr_Q.put(['dist', 'Output/r', r_batch.detach().cpu(), self.training_counter])
 
-                    self.wr_Q.put(['dist', 'data/u', u_batch.detach(), self.training_counter])
-                    self.wr_Q.put(['dist', 'data/z', z_batch.detach(), self.training_counter])
-                    self.wr_Q.put(['dist', 'data/Pi', pi_batch.detach(), self.training_counter])
+                    self.wr_Q.put(['dist', 'data/u', u_batch.detach().cpu(), self.training_counter])
+                    self.wr_Q.put(['dist', 'data/z', z_batch.detach().cpu(), self.training_counter])
+                    self.wr_Q.put(['dist', 'data/Pi', pi_batch.detach().cpu(), self.training_counter])
 
-                    self.wr_Q.put(['scalar', 'Total_loss/train', loss.mean().detach(), self.training_counter])
-                    self.wr_Q.put(['scalar', 'Reward_loss/train', r_loss.mean().detach(), self.training_counter])
-                    self.wr_Q.put(['scalar', 'Value_loss/train', v_loss.mean().detach(), self.training_counter])
-                    self.wr_Q.put(['dist', 'Policy_loss/train', P_loss.detach(), self.training_counter])
-                    self.wr_Q.put(['scalar', 'learning_rate', self.scheduler.get_last_lr()[0], self.training_counter])
+                    self.wr_Q.put(['scalar', 'Total_loss/train', loss.mean().detach().cpu(), self.training_counter])
+                    self.wr_Q.put(['scalar', 'Reward_loss/train', r_loss.mean().detach().cpu(), self.training_counter])
+                    self.wr_Q.put(['scalar', 'Value_loss/train', v_loss.mean().detach().cpu(), self.training_counter])
+                    self.wr_Q.put(['dist', 'Policy_loss/train', P_loss.detach().cpu(), self.training_counter])
+                    self.wr_Q.put(['scalar', 'learning_rate', self.scheduler.get_last_lr()[0].cpu(), self.training_counter])
                 except:
                     return
             self.training_counter += 1
@@ -219,8 +219,6 @@ def train_ex_worker(ex_Q, f_model, g_model, h_model, experience_settings, traini
 
 def writer_worker(wr_Q):
     writer = SummaryWriter()
-
-
     while True:
         f = open("debug.txt", "a")
         # Empty queue
