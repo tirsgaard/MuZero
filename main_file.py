@@ -67,6 +67,7 @@ if __name__ == '__main__':
     ER_worker.start()
 
     # Worker for storing statistics
+    torch.multiprocessing.set_start_method('fork', force=True)
     wr_worker = Process(target=writer_worker, args=(Q_writer,))
     wr_worker.start()
     # define variables to be used
