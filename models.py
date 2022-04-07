@@ -28,6 +28,7 @@ class dummy_networkG(nn.Module):
         self.input_shape = input_shape
         self.output1_shape = output1_shape
         self.hidden_size = hidden_size
+        self.train_count = 0
 
         # Hidden state head
         self.layer1_1 = nn.Linear(np.prod(input_shape), self.hidden_size)
@@ -56,6 +57,7 @@ class dummy_networkH(nn.Module):
         self.input_shape = input_shape
         self.output1_shape = output1_shape
         self.hidden_size = hidden_size
+        self.train_count = 0
         self.layer1_1 = nn.Linear(np.prod(input_shape), self.hidden_size)
         self.activation1_1 = nn.ReLU()
         self.layer1_2 = nn.Linear(self.hidden_size, np.prod(output1_shape))
@@ -74,6 +76,7 @@ class dummy_networkF(nn.Module):
         self.input_shape = input_shape
         self.output1_shape = output1_shape
         self.hidden_size = hidden_size
+        self.train_count = 0
         # Policy head
         self.layer1_1 = nn.Linear(np.prod(input_shape), self.hidden_size)
         self.activation1_1 = nn.ReLU()

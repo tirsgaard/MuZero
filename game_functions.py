@@ -112,7 +112,9 @@ def h_f_process(batch, pipe_queue, jobs_indexes, h_model, f_model):
         v_indexed = v[index_start:index_end]
         pipe_queue.popleft().send([S_indexed, P_indexed, v_indexed])
         index_start = index_end
-
+def temperature_scale(N, temp):
+    N_temp = N**temp
+    return N_temp/np.sum(N_temp)
 
 def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZero_settings, experience_settings):
     # Hyperparameters
@@ -141,28 +143,15 @@ def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZe
         # Generate new tree, to throw away old values
         root_node = generate_root(S_obs, h_Q, f_g_Q, h_send, h_rec, f_g_send, f_g_rec, MCTS_settings)
         #root_node.set_illegal(env.illegal())
-        if (turns <= temp_switch):
-            # Case where early temperature is used
-            # Simulate MCTS
-            root_node = MCTS(root_node, f_g_Q, MCTS_settings)
-            # Compute action distribution from policy
-            pi_legal = root_node.N / (root_node.N_total-1)  # -1 to not count exploration of the root-node itself
-            # Selecet action
-            action = np.random.choice(n_actions, size=1, p=pi_legal)[0]
-        else:
-            # Case where later temperature is used
-            # Get noise
-            eta = np.random.dirichlet(np.ones(action_size) * eta_par)
-            root_node.P = (1 - epsilon) * root_node.P + epsilon * eta
+        # Simulate MCTS
+        root_node = MCTS(root_node, f_g_Q, MCTS_settings)
+        # Compute action distribution from policy
+        pi_legal = root_node.N / (root_node.N_total - 1)  # -1 to not count exploration of the root-node itself
+        temp = 0.25 + 0.99**game_id
+        pi_scaled = temperature_scale(pi_legal, temp)
 
-            # Simulate MCTS
-            root_node = MCTS(root_node, f_g_Q, MCTS_settings)
-
-            # Compute legal actions visit count (needed for storing)
-            pi_legal = root_node.N / root_node.N_total
-
-            # Pick move
-            action = np.argmax(root_node.N)
+        # Selecet action
+        action = np.random.choice(n_actions, size=1, p=pi_scaled)[0]
 
         # Pick move
         root_node = root_node.action_edges[action]
