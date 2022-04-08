@@ -27,7 +27,7 @@ if __name__ == '__main__':
     training_settings = conf.training_settings
     # Construct networks
     import numpy as np
-    Q_writer = SimpleQueue()
+    Q_writer = Queue()
     training_settings["Q_writer"] = Q_writer
     experience_settings["Q_writer"] = Q_writer
     MCTS_settings["Q_writer"] = Q_writer
@@ -63,7 +63,7 @@ if __name__ == '__main__':
     torch.multiprocessing.set_start_method('spawn', force=True)
     # Construct model trainer and experience storage
     ER_Q = Queue()
-    ER_worker = Process(target=train_ex_worker, args=(ER_Q, f_model, g_model, h_model, experience_settings, training_settings, MCTS_settings))
+    ER_worker = Process(target=train_ex_worker, args=(ER_Q, f_model, g_model, h_model, experience_settings, training_settings, MCTS_settings, Q_writer))
     ER_worker.start()
 
     # Worker for storing statistics

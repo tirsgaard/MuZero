@@ -203,9 +203,10 @@ class model_trainer:
 
 
 
-def train_ex_worker(ex_Q, f_model, g_model, h_model, experience_settings, training_settings, MCTS_settings):
+def train_ex_worker(ex_Q, f_model, g_model, h_model, experience_settings, training_settings, MCTS_settings, Q_writer):
     ER_server = experience_replay_server(ex_Q, experience_settings, MCTS_settings)
     trainer = model_trainer(f_model, g_model, h_model, ER_server, experience_settings, training_settings, MCTS_settings)
+    trainer.wr_Q = Q_writer
     print("starting training worker")
     while True:
         # Empty queue
