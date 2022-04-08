@@ -135,7 +135,6 @@ class model_trainer:
         return converted
 
     def train(self):
-        print("Training")
         self.f_model.to(self.device).train()
         self.g_model.to(self.device).train()
         self.h_model.to(self.device).train()
@@ -181,11 +180,8 @@ class model_trainer:
             self.optimizer.step()
             self.scheduler.step()
 
-            print("finished a training round")
             if self.training_counter % 10 == 1:
-                print("Sending information to queue")
                 self.wr_Q.put(['dist', 'Output/v', v_batch.detach().cpu().numpy(), self.training_counter])
-                print("sucess sending first info")
                 self.wr_Q.put(['dist', 'Output/P', P_batch.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Output/r', r_batch.detach().cpu(), self.training_counter])
 
@@ -198,7 +194,7 @@ class model_trainer:
                 self.wr_Q.put(['scalar', 'Value_loss/train', v_loss.mean().detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Policy_loss/train', P_loss.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['scalar', 'learning_rate', self.scheduler.get_last_lr()[0], self.training_counter])
-                print("send saved information")
+
             self.training_counter += 1
 
 
@@ -206,14 +202,11 @@ class model_trainer:
 def train_ex_worker(ex_Q, f_model, g_model, h_model, experience_settings, training_settings, MCTS_settings):
     ER_server = experience_replay_server(ex_Q, experience_settings, MCTS_settings)
     trainer = model_trainer(f_model, g_model, h_model, ER_server, experience_settings, training_settings, MCTS_settings)
-    print("starting training worker")
     while True:
         # Empty queue
         while (ER_server.total_store < training_settings["train_batch_size"]) or not ex_Q.empty():
-            print("reciving info")
             ER_server.recv_store()
         # Train
-        print("begin  train")
         trainer.train()
 
 def writer_worker(wr_Q):
