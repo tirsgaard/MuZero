@@ -224,7 +224,15 @@ def verify_w(w, node, MCTS_settings):
     w_sum = node.N_total*node.r+gamma*node.v
     for action in node.action_edges:
         w_sum += gamma*gamma*node.W[action]
-    assert(w==w_sum)
+
+    try:
+        assert(w==w_sum)
+    except AssertionError:
+        print("w was: ")
+        print(w)
+        print("w_sum was: ")
+        print(w_sum)
+        raise AssertionError
 
 
 def map_tree(root_node, normalizer, game_id):
