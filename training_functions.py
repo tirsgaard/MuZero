@@ -181,6 +181,7 @@ class model_trainer:
             self.optimizer.step()
             self.scheduler.step()
 
+            print("finished a training round")
             if self.training_counter % 10 == 1:
                 self.wr_Q.put(['dist', 'Output/v', v_batch.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Output/P', P_batch.detach().cpu(), self.training_counter])
@@ -195,6 +196,7 @@ class model_trainer:
                 self.wr_Q.put(['scalar', 'Value_loss/train', v_loss.mean().detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Policy_loss/train', P_loss.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['scalar', 'learning_rate', self.scheduler.get_last_lr()[0].cpu(), self.training_counter])
+                print("send saved information")
             self.training_counter += 1
 
 
