@@ -123,22 +123,21 @@ def select_node(root_node, normalizer, leaf_number, MCTS_settings):
         current_node.U = current_node.P * np.sqrt(current_node.N_total)/(1+current_node.N)*temp
         Q_normed = normalizer.norm(current_node.Q)
         a_chosen = np.argmax(Q_normed + current_node.U + current_node.illegal_actions)
-        current_node.N_total += n_vl  # Add virtual loss
 
-        # Add action and node to path and change color
         # Add current node to path
         current_path.append((current_node, a_chosen))
 
         ## Update stored values using virtual loss
+        current_node.N_total += n_vl  # Add virtual loss
+        current_node.N[a_chosen] += n_vl
+        current_node.N_inv[a_chosen] = 1/current_node.N[a_chosen]
         current_node.W[a_chosen] += -n_vl
-        current_node.Q[a_chosen] = (current_node.W[a_chosen]) / (current_node.N[a_chosen] + n_vl)
+        current_node.Q[a_chosen] = current_node.W[a_chosen] / current_node.N[a_chosen]
+
 
         # continue based if edges are explored or not
-        if current_node.N[a_chosen] != 0:  # Case for explored edge
+        if current_node.N[a_chosen] != n_vl:  # Case for explored edge
             # Update current node, color of turn, and repeat
-            current_node.N[a_chosen] += n_vl
-            current_node.N_inv[a_chosen] = 1 / (current_node.N[a_chosen] + 1)
-
             current_node = current_node.action_edges[a_chosen]  # Select new node
             if not current_node.explored:
                 # Case where same new edge is explored during parallel
@@ -146,7 +145,7 @@ def select_node(root_node, normalizer, leaf_number, MCTS_settings):
                 for node, action in current_path:
                     node.N_total -= n_vl
                     node.N[action] -= n_vl
-                    node.N_inv[action] = 1 / (node.N[action] + 1)
+                    node.N_inv[action] = 1 / node.N[action]
                     node.W[action] += n_vl
                     node.Q[action] = node.W[action] / node.N[action]
                 break
@@ -155,9 +154,6 @@ def select_node(root_node, normalizer, leaf_number, MCTS_settings):
         else:  # Not explored case
             # Virtual loss update could be skipped for the last node
             #   but it makes the code simpler to include it
-            current_node.N[a_chosen] += n_vl
-            current_node.N_inv[a_chosen] = 1 / (current_node.N[a_chosen] + 1)
-
             # Make new end node
             new_node = state_node(MCTS_settings["action_size"], leaf_number)
             current_node.action_edges[a_chosen] = new_node
@@ -208,6 +204,27 @@ def backup_node(stored_jobs, S_array, r_array, P_array, v_array, normalizer, MCT
     return
 
 
+def verify_nodes(node, MCTS_settings):
+    assert(np.sum(node.N)==node.N_total-1)  # -1 to account for initial exploration
+    for action in node.action_edges:
+        w = node.W[action]
+        verify_w(w, node, MCTS_settings)
+        child = node.action_edges[action]
+        verify_nodes(child)
+
+def verify_w(w, node, MCTS_settings):
+    gamma = MCTS_settings["gamma"]
+    w_sum = 0
+    if node.N_total == 1:
+        w_sum += node.v
+    else:
+        for action in node.action_edges:
+            child = node.action_edges[action]
+            w_sum += child.r + gamma*node.W[action]
+    assert(w==w_sum)
+
+
+
 def map_tree(root_node, normalizer, game_id):
     tree = graphviz.Digraph(comment='MCT')
     id = [0]
@@ -231,13 +248,14 @@ def iterate_tree(tree, parent_node, id, thick_get, normalizer):
         Q_val = parent_node.Q[action]
         Q_norm = normalizer.norm(Q_val)
         node_text = str(child.id+1) \
-                    + "\n Q: " + str(np.round(Q_val, decimals=3)) \
-                    + "\n Q_norm: " + str(np.round(Q_norm, decimals=3)) \
-                    + "\n W: " + str(np.round(Q_norm, decimals=2))
+                    + "\n Q: " + str(np.round(Q_val, decimals=8)) \
+                    + "\n Q_norm: " + str(np.round(Q_norm, decimals=8)) \
+                    + "\n W: " + str(np.round(parent_node.W[action], decimals=8)) \
+                    + "\n v: " + str(np.round(child.v, decimals=8))
         tree.node(str(id[0]), node_text, color=str(int(Q_norm*10+1)), colorscheme="rdylgn11")
         tree.edge(str(parent_id), str(id[0]),
                   penwidth=str(thick_get(visits)),
-                  label="a: " + str(action) + "\n N(a): " + str(int(visits)),
+                  label="a: " + str(action) + "\n N(a): " + str(int(visits)) + "\n r: " + str(np.round(child.r, decimals=8)),
                   color=str(int(Q_norm * 10 + 1)),
                   colorscheme= "rdylgn11",
                   arrowhead='none')
