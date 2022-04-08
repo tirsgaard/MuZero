@@ -55,11 +55,11 @@ if __name__ == '__main__':
     env_maker = lambda: gym.make("CartPole-v1")
 
     # Construct model trainer and experience storage
+    torch.multiprocessing.set_start_method('spawn', force=True)
     Q_writer = Queue()
     training_settings["Q_writer"] = Q_writer
     experience_settings["Q_writer"] = Q_writer
     MCTS_settings["Q_writer"] = Q_writer
-    torch.multiprocessing.set_start_method('spawn', force=True)
     ER_Q = Queue()
     ER_worker = Process(target=train_ex_worker, args=(ER_Q, f_model, g_model, h_model, experience_settings, training_settings, MCTS_settings))
     ER_worker.start()
