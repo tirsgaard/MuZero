@@ -194,7 +194,6 @@ def sim_games(env_maker, f_model, g_model, h_model, EX_Q, MCTS_settings, MuZero_
     # Function for generating games
     process_workers = []
     # This is important for generating a worker with torch support
-    torch.multiprocessing.set_start_method('spawn', force=True)
     f_model.eval()  # Set model for evaluating
     g_model.eval()
     h_model.eval()
@@ -210,6 +209,7 @@ def sim_games(env_maker, f_model, g_model, h_model, EX_Q, MCTS_settings, MuZero_
 
     # Make process for gpu workers
     hidden_input_size = hidden_input_size = (MCTS_settings["action_size"][0]+1,) + MCTS_settings["hidden_S_size"]
+    torch.multiprocessing.set_start_method('spawn', force=True)
     process_workers.append(Process(target=gpu_worker, args=(gf_model_Q, hidden_input_size, MCTS_settings, g_model, f_model, True)))
     process_workers.append(Process(target=gpu_worker, args=(hf_model_Q, MCTS_settings["observation_size"], MCTS_settings, h_model, f_model, False)))
     # Start gpu and data_loader worker
