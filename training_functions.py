@@ -215,6 +215,7 @@ def writer_worker(wr_Q):
         while not wr_Q.empty():
             type, name, value, index = wr_Q.get()
             if type == 'scalar':
+                raise TypeError
                 writer.add_scalar(name, value, index)
             elif type == 'dist':
                 raise TypeError
