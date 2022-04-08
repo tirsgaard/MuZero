@@ -212,7 +212,7 @@ def backup_node(stored_jobs, S_array, r_array, P_array, v_array, normalizer, MCT
 
 
 def verify_nodes(node, MCTS_settings):
-    #assert(np.sum(node.N) == node.N_total-1)  # -1 to account for initial exploration
+    assert(np.sum(node.N) == node.N_total-1)  # -1 to account for initial exploration
     for action in node.action_edges:
         w = node.W[action]
         child = node.action_edges[action]
@@ -231,7 +231,7 @@ def verify_w(w, node, MCTS_settings):
         print(w)
         print("w_sum was: ")
         print(w_sum)
-        #raise AssertionError
+        raise AssertionError
 
 
 def map_tree(root_node, normalizer, game_id):
