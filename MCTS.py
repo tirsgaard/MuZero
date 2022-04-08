@@ -4,8 +4,9 @@ from torch.multiprocessing import Process, Queue, Pipe, Value, Lock, Manager, Po
 import graphviz
 from models import stack_a
 class state_node:
-    def __init__(self, action_size):
+    def __init__(self, action_size, id):
         self.action_edges = {}  # dictionary containing reference to child notes
+        self.id = id  # Not needed for algorithm, but usefull for visualisation
         self.N_total = 1  # Total times node visited during MCTS
         self.game_over = False  # If game is over
         self.explored = False
@@ -45,10 +46,8 @@ class min_max_vals:
         return norm_Q
 
 
-
-
 def generate_root(S_obs, h_Q, f_g_Q, h_send, h_rec, f_g_send, f_g_rec, MCTS_settings):
-    root_node = state_node(MCTS_settings["action_size"])
+    root_node = state_node(MCTS_settings["action_size"], 0)
     h_Q.put([S_obs[None], h_send])  # Get hidden state of observation
     S, P, v = h_rec.recv()
     #stored_jobs = [[S, [], [], root_node, a]]
@@ -92,10 +91,8 @@ def MCTS(root_node, f_g_Q, MCTS_settings):
     i = 0
     while i < N_MCTS_sim:  # Keep number of simulations below the set N
         stored_jobs = []
-        n_failed = 0
         for j in range(n_parallel_explorations):
-            current_path = deque([])
-            job = select_node(root_node, normalizer, MCTS_settings)
+            job = select_node(root_node, normalizer, i + j, MCTS_settings)
             # Code for breaking simuntanious searches of same node
             if (job == []):
                 break
@@ -108,26 +105,12 @@ def MCTS(root_node, f_g_Q, MCTS_settings):
         # Update the interval of observed reward returns
         i += len(stored_jobs)
 
-    return root_node
-
-def map_tree(root_node):
-    tree = graphviz.Digraphs(comment='MCT')
-    tree.node(str(id), str(id))
-    id = 0
-    tree = iterate_tree(tree, root_node, id)
-
-def iterate_tree(tree, parent_node, id):
-    parent_id = id
-    job_list = list(parent_node.action_edges)
-    for node in job_list:
-        id += 1
-        tree.node(str(id), str(id))
-        tree.edge(str(parent_id), str(id))
-        iterate_tree(tree, node, id)
-    return tree
+    return root_node, normalizer
 
 
-def select_node(root_node, normalizer, MCTS_settings):
+
+
+def select_node(root_node, normalizer, leaf_number, MCTS_settings):
     n_vl = MCTS_settings["virtual_loss"]
     c1 = MCTS_settings["c1"]
     c2 = MCTS_settings["c2"]
@@ -176,7 +159,7 @@ def select_node(root_node, normalizer, MCTS_settings):
             current_node.N_inv[a_chosen] = 1 / (current_node.N[a_chosen] + 1)
 
             # Make new end node
-            new_node = state_node(MCTS_settings["action_size"])
+            new_node = state_node(MCTS_settings["action_size"], leaf_number)
             current_node.action_edges[a_chosen] = new_node
 
             # Get previous state
@@ -223,3 +206,40 @@ def backup_node(stored_jobs, S_array, r_array, P_array, v_array, normalizer, MCT
         k += 1  # Update k for each simulation
 
     return
+
+
+def map_tree(root_node, normalizer, game_id):
+    tree = graphviz.Digraph(comment='MCT')
+    id = [0]
+    tree.node(str(id[0]), str(id[0]))
+    max_thick = 10
+    min_thick = 0.1
+    increase_thick = (max_thick-min_thick)/(root_node.N_total-1)
+    thick_get = lambda n: min_thick + increase_thick*n
+    tree = iterate_tree(tree, root_node, id, thick_get, normalizer)
+    tree.render('MCT_graphs/' + str(game_id) + '_MCTS' + '.gv').replace('\\', '/')
+    'MCT_graphs/' + str(game_id) + '_MCTS' + '.gv.pdf'
+    return tree
+
+def iterate_tree(tree, parent_node, id, thick_get, normalizer):
+    parent_id = id[0]
+    job_list = list(parent_node.action_edges)
+    for action in job_list:
+        id[0] += 1
+        child = parent_node.action_edges[action]
+        visits = parent_node.N[action]
+        Q_val = parent_node.Q[action]
+        Q_norm = normalizer.norm(Q_val)
+        node_text = str(child.id+1) \
+                    + "\n Q: " + str(np.round(Q_val, decimals=3)) \
+                    + "\n Q_norm: " + str(np.round(Q_norm, decimals=3)) \
+                    + "\n W: " + str(np.round(Q_norm, decimals=2))
+        tree.node(str(id[0]), node_text, color=str(int(Q_norm*10+1)), colorscheme="rdylgn11")
+        tree.edge(str(parent_id), str(id[0]),
+                  penwidth=str(thick_get(visits)),
+                  label="a: " + str(action) + "\n N(a): " + str(int(visits)),
+                  color=str(int(Q_norm * 10 + 1)),
+                  colorscheme= "rdylgn11",
+                  arrowhead='none')
+        iterate_tree(tree, child, id, thick_get, normalizer)
+    return tree

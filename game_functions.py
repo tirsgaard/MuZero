@@ -6,6 +6,7 @@ import queue
 from storage_functions import experience_replay_sender
 from MCTS import state_node, expand_node, backup_node, MCTS, generate_root, map_tree
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 # Import torch things
 import torch
@@ -144,8 +145,12 @@ def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZe
         root_node = generate_root(S_obs, h_Q, f_g_Q, h_send, h_rec, f_g_send, f_g_rec, MCTS_settings)
         #root_node.set_illegal(env.illegal())
         # Simulate MCTS
-        root_node = MCTS(root_node, f_g_Q, MCTS_settings)
-        tree = map_tree(root_node)
+        root_node, normalizer = MCTS(root_node, f_g_Q, MCTS_settings)
+        if game_id % 100 == 0 and turns == 5:
+            # Save tree search and image of env
+            tree = map_tree(root_node, normalizer, game_id)
+            env_image = env.render(mode="rgb_array")
+            plt.imsave('MCT_graphs/' + str(game_id) + '_env_image' + '.jpeg', env_image)
 
         # Compute action distribution from policy
         pi_legal = root_node.N / (root_node.N_total - 1)  # -1 to not count exploration of the root-node itself
