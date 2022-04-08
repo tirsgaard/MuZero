@@ -26,12 +26,6 @@ if __name__ == '__main__':
     MCTS_settings = conf.MCTS_settings
     training_settings = conf.training_settings
     # Construct networks
-    torch.multiprocessing.set_start_method('spawn', force=True)
-    Q_writer = Queue()
-    training_settings["Q_writer"] = Q_writer
-    experience_settings["Q_writer"] = Q_writer
-    MCTS_settings["Q_writer"] = Q_writer
-
     hidden_shape = MCTS_settings["hidden_S_size"]
     action_size = MCTS_settings["action_size"]
     hidden_input_size = (MCTS_settings["action_size"][0] + 1,) + MCTS_settings["hidden_S_size"]
@@ -60,8 +54,12 @@ if __name__ == '__main__':
     # Function for creating environment. Needs to create seperate env for each worker
     env_maker = lambda: gym.make("CartPole-v1")
 
-
     # Construct model trainer and experience storage
+    torch.multiprocessing.set_start_method('spawn', force=True)
+    Q_writer = Queue()
+    training_settings["Q_writer"] = Q_writer
+    experience_settings["Q_writer"] = Q_writer
+    MCTS_settings["Q_writer"] = Q_writer
     ER_Q = Queue()
     ER_worker = Process(target=train_ex_worker, args=(ER_Q, f_model, g_model, h_model, experience_settings, training_settings, MCTS_settings))
     ER_worker.start()
