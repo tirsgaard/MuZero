@@ -1,6 +1,7 @@
 import numpy as np
 from collections import deque, Counter
 from torch.multiprocessing import Process, Queue, Pipe, Value, Lock, Manager, Pool
+import graphviz
 from models import stack_a
 class state_node:
     def __init__(self, action_size):
@@ -108,6 +109,23 @@ def MCTS(root_node, f_g_Q, MCTS_settings):
         i += len(stored_jobs)
 
     return root_node
+
+def map_tree(root_node):
+    tree = graphviz.Digraphs(comment='MCT')
+    tree.node(str(id), str(id))
+    id = 0
+    tree = iterate_tree(tree, root_node, id)
+
+def iterate_tree(tree, parent_node, id):
+    parent_id = id
+    job_list = list(parent_node.action_edges)
+    for node in job_list:
+        id += 1
+        tree.node(str(id), str(id))
+        tree.edge(str(parent_id), str(id))
+        iterate_tree(tree, node, id)
+    return tree
+
 
 def select_node(root_node, normalizer, MCTS_settings):
     n_vl = MCTS_settings["virtual_loss"]

@@ -4,7 +4,7 @@ from torch.multiprocessing import Process, Queue, Pipe, Value, Lock, Manager, Po
 import time
 import queue
 from storage_functions import experience_replay_sender
-from MCTS import state_node, expand_node, backup_node, MCTS, generate_root
+from MCTS import state_node, expand_node, backup_node, MCTS, generate_root, map_tree
 from tqdm import tqdm
 
 # Import torch things
@@ -145,6 +145,8 @@ def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZe
         #root_node.set_illegal(env.illegal())
         # Simulate MCTS
         root_node = MCTS(root_node, f_g_Q, MCTS_settings)
+        tree = map_tree(root_node)
+
         # Compute action distribution from policy
         pi_legal = root_node.N / (root_node.N_total - 1)  # -1 to not count exploration of the root-node itself
         temp = 0.25 + 0.99**game_id
