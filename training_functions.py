@@ -135,6 +135,7 @@ class model_trainer:
         return converted
 
     def train(self):
+        print("Training")
         self.f_model.to(self.device).train()
         self.g_model.to(self.device).train()
         self.h_model.to(self.device).train()
@@ -201,6 +202,7 @@ class model_trainer:
 def train_ex_worker(ex_Q, f_model, g_model, h_model, experience_settings, training_settings, MCTS_settings):
     ER_server = experience_replay_server(ex_Q, experience_settings, MCTS_settings)
     trainer = model_trainer(f_model, g_model, h_model, ER_server, experience_settings, training_settings, MCTS_settings)
+    print("starting training worker")
     while True:
         # Empty queue
         while (ER_server.total_store < training_settings["train_batch_size"]) or not ex_Q.empty():
@@ -215,7 +217,6 @@ def writer_worker(wr_Q):
         while not wr_Q.empty():
             type, name, value, index = wr_Q.get()
             if type == 'scalar':
-                raise TypeError
                 writer.add_scalar(name, value, index)
             elif type == 'dist':
                 raise TypeError
