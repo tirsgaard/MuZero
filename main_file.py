@@ -10,7 +10,7 @@ Created on Sat Nov 23 16:44:33 2019
 #from go_model import ResNet, ResNetBasicBlock
 from game_functions import sim_games
 from training_functions import save_model, load_latest_model, model_trainer, train_ex_worker, writer_worker
-from torch.multiprocessing import Process, Queue, Pipe, Value, Lock, Manager, Pool
+from torch.multiprocessing import Process, Queue, Pipe, Value, Lock, Manager, Pool, SimpleQueue
 from storage_functions import experience_replay_server
 from models import dummy_networkF, dummy_networkG, dummy_networkH
 import gym
@@ -27,7 +27,7 @@ if __name__ == '__main__':
     training_settings = conf.training_settings
     # Construct networks
     import numpy as np
-    Q_writer = Queue()
+    Q_writer = SimpleQueue()
     training_settings["Q_writer"] = Q_writer
     experience_settings["Q_writer"] = Q_writer
     MCTS_settings["Q_writer"] = Q_writer
@@ -60,7 +60,7 @@ if __name__ == '__main__':
     # Function for creating environment. Needs to create seperate env for each worker
     env_maker = lambda: gym.make("CartPole-v1")
 
-    torch.multiprocessing.set_start_method('forkserver', force=True)
+    torch.multiprocessing.set_start_method('spawn', force=True)
     # Construct model trainer and experience storage
     ER_Q = Queue()
     ER_worker = Process(target=train_ex_worker, args=(ER_Q, f_model, g_model, h_model, experience_settings, training_settings, MCTS_settings))
