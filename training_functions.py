@@ -208,8 +208,10 @@ def train_ex_worker(ex_Q, f_model, g_model, h_model, experience_settings, traini
     while True:
         # Empty queue
         while (ER_server.total_store < training_settings["train_batch_size"]) or not ex_Q.empty():
+            print("reciving info")
             ER_server.recv_store()
         # Train
+        print("begin  train")
         trainer.train()
 
 def writer_worker(wr_Q):
