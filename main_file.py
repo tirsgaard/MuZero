@@ -60,7 +60,7 @@ if __name__ == '__main__':
     # Function for creating environment. Needs to create seperate env for each worker
     env_maker = lambda: gym.make("CartPole-v1")
 
-
+    torch.multiprocessing.set_start_method('spawn', force=False)
     # Construct model trainer and experience storage
     ER_Q = Queue()
     ER_worker = Process(target=train_ex_worker, args=(ER_Q, f_model, g_model, h_model, experience_settings, training_settings, MCTS_settings))
