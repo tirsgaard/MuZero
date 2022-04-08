@@ -4,13 +4,12 @@ from torch.multiprocessing import Process, Queue, Pipe, Value, Lock, Manager, Po
 import time
 import queue
 from storage_functions import experience_replay_sender
-from MCTS import state_node, expand_node, backup_node, MCTS, generate_root, map_tree
+from MCTS import MCTS, generate_root, map_tree, verify_nodes
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 
 # Import torch things
 import torch
-
 
 def gpu_worker(gpu_Q, input_shape, MCTS_settings, model, f_model, use_g_model):
     torch.backends.cudnn.benchmark = True
@@ -113,9 +112,12 @@ def h_f_process(batch, pipe_queue, jobs_indexes, h_model, f_model):
         v_indexed = v[index_start:index_end]
         pipe_queue.popleft().send([S_indexed, P_indexed, v_indexed])
         index_start = index_end
+
+
 def temperature_scale(N, temp):
     N_temp = N**temp
     return N_temp/np.sum(N_temp)
+
 
 def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZero_settings, experience_settings):
     # Hyperparameters
@@ -149,6 +151,7 @@ def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZe
         if game_id % 100 == 0 and turns == 5:
             # Save tree search and image of env
             tree = map_tree(root_node, normalizer, game_id)
+            verify_nodes(root_node, MCTS_settings)
             env_image = env.render(mode="rgb_array")
             plt.imsave('MCT_graphs/' + str(game_id) + '_env_image' + '.jpeg', env_image)
 

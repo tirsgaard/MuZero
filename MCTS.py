@@ -13,7 +13,7 @@ class state_node:
         self.N = np.zeros(action_size)  # Total times each child node visited during MCTS
         self.N_inv = np.ones(action_size)  # Store inverse N for faster calculations
         self.Q = np.zeros(action_size)  # Average return observed for state for all actions
-        self.W = np.zeros(action_size)  # Used to stabilise update of average return Q
+        self.W = np.zeros(action_size, dtype=np.float64)  # Used to stabilise update of average return Q
         self.illegal_actions = np.zeros(action_size)  # If any actions are illegal, default is none
 
     def explore(self, S, P, r, v):
@@ -57,11 +57,14 @@ def generate_root(S_obs, h_Q, f_g_Q, h_send, h_rec, f_g_send, f_g_rec, MCTS_sett
     root_node.explore(S, P, 0, v)
     return root_node
 
+
 def node_back_up(node_path, v, gamma, n_vl, normalizer):
     # Function for backing up after a new node has been evaluated
-    l = len(node_path) # Length of path
+    l = len(node_path)  # Length of path
     k = l
     r = []  # List containing all rewards (r)
+    r_cum = 0
+    v_cum = v
     for node, action in reversed(node_path):
         # Loop over path in reverse order for easier update of r
         node.N_total += -n_vl + 1
@@ -69,10 +72,15 @@ def node_back_up(node_path, v, gamma, n_vl, normalizer):
         # Skip inverse since it will be updated later
         node.N_inv[action] = 1 / node.N[action]
 
+        """
         taus = l-k-1 - np.arange(0, l-k)  # Reverse list of tau
         gammas = gamma**taus
         G = sum(gammas*r) + gamma**(l-k)*v
         node.W[action] += G + n_vl
+        """
+        r_cum = gamma*r_cum + node.action_edges[action].r
+        v_cum = gamma*v_cum
+        node.W[action] += r_cum + v_cum + n_vl
         node.Q[action] = node.W[action] / node.N[action]
         normalizer.update(node.Q[action])  # Update lowest and highest Q-values observed in tree
         r.append(node.r)
@@ -108,8 +116,6 @@ def MCTS(root_node, f_g_Q, MCTS_settings):
     return root_node, normalizer
 
 
-
-
 def select_node(root_node, normalizer, leaf_number, MCTS_settings):
     n_vl = MCTS_settings["virtual_loss"]
     c1 = MCTS_settings["c1"]
@@ -118,9 +124,9 @@ def select_node(root_node, normalizer, leaf_number, MCTS_settings):
     current_path = deque([])
     current_node = root_node
     while True:  # Continue to traverse tree until new edge is found
-        temp = c1+np.log((current_node.N+c2+1)/c2)
+        temp = c1+np.log((current_node.N_total+c2+1)/c2)
         # Choose action
-        current_node.U = current_node.P * np.sqrt(current_node.N_total)/(1+current_node.N)*temp
+        current_node.U = current_node.P * np.sqrt(current_node.N_total)*temp/(1+current_node.N)
         Q_normed = normalizer.norm(current_node.Q)
         a_chosen = np.argmax(Q_normed + current_node.U + current_node.illegal_actions)
 
@@ -165,6 +171,7 @@ def select_node(root_node, normalizer, leaf_number, MCTS_settings):
             break
     return job
 
+
 def expand_node(stored_jobs, f_g_Q, f_g_send, f_g_rec, MCTS_settings):
     hidden_S_size = MCTS_settings["hidden_S_size"]
     action_size = MCTS_settings["action_size"]
@@ -205,24 +212,19 @@ def backup_node(stored_jobs, S_array, r_array, P_array, v_array, normalizer, MCT
 
 
 def verify_nodes(node, MCTS_settings):
-    assert(np.sum(node.N)==node.N_total-1)  # -1 to account for initial exploration
+    assert(np.sum(node.N) == node.N_total-1)  # -1 to account for initial exploration
     for action in node.action_edges:
         w = node.W[action]
-        verify_w(w, node, MCTS_settings)
         child = node.action_edges[action]
-        verify_nodes(child)
+        verify_w(w, child, MCTS_settings)
+        verify_nodes(child, MCTS_settings)
 
 def verify_w(w, node, MCTS_settings):
     gamma = MCTS_settings["gamma"]
-    w_sum = 0
-    if node.N_total == 1:
-        w_sum += node.v
-    else:
-        for action in node.action_edges:
-            child = node.action_edges[action]
-            w_sum += child.r + gamma*node.W[action]
+    w_sum = node.N_total*node.r+gamma*node.v
+    for action in node.action_edges:
+        w_sum += gamma*gamma*node.W[action]
     assert(w==w_sum)
-
 
 
 def map_tree(root_node, normalizer, game_id):
