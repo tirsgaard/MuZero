@@ -219,7 +219,6 @@ def writer_worker(wr_Q):
             if type == 'scalar':
                 writer.add_scalar(name, value, index)
             elif type == 'dist':
-                raise TypeError
                 writer.add_histogram(name, value, index)
             else:
                 raise TypeError
