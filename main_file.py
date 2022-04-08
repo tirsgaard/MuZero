@@ -25,6 +25,7 @@ if __name__ == '__main__':
     experience_settings = conf.experience_settings
     MCTS_settings = conf.MCTS_settings
     training_settings = conf.training_settings
+    torch.multiprocessing.set_start_method('spawn', force=True)
     # Construct networks
     hidden_shape = MCTS_settings["hidden_S_size"]
     action_size = MCTS_settings["action_size"]
@@ -55,7 +56,6 @@ if __name__ == '__main__':
     env_maker = lambda: gym.make("CartPole-v1")
 
     # Construct model trainer and experience storage
-    torch.multiprocessing.set_start_method('spawn', force=True)
     Q_writer = Queue()
     training_settings["Q_writer"] = Q_writer
     experience_settings["Q_writer"] = Q_writer

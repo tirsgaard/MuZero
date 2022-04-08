@@ -224,7 +224,6 @@ def verify_w(w, node, MCTS_settings):
     w_sum = node.N_total*node.r+gamma*node.v
     for action in node.action_edges:
         w_sum += gamma*gamma*node.W[action]
-
     try:
         assert(w==w_sum)
     except AssertionError:

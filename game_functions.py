@@ -147,6 +147,7 @@ def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZe
         #root_node.set_illegal(env.illegal())
         # Simulate MCTS
         root_node, normalizer = MCTS(root_node, f_g_Q, MCTS_settings)
+        verify_nodes(root_node, MCTS_settings)
         if game_id % 100 == 0 and turns == 5:
             # Save tree search and image of env
             tree = map_tree(root_node, normalizer, game_id)
