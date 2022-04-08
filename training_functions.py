@@ -149,12 +149,7 @@ class model_trainer:
                                                                                                             self.K)
             S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp = self.convert_torch([S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp])
             z_batch = u_batch.clone()
-            """
-            assert(torch.any(z_batch[:, 0] == S_batch[:, -1, 0, 0]))
-            assert(torch.any(u_batch[:, 0] == S_batch[:, -1, 0, 0]))
-            assert(torch.any(z_batch[:, 0] + 1 == z_batch[:, 1]))
-            assert(torch.any(u_batch[:, 0] + 1 == u_batch[:, 1]))
-            """
+
             p_vals = []  # Number
             r_batches = []
             v_batches = []
@@ -186,23 +181,19 @@ class model_trainer:
             self.scheduler.step()
 
             if self.training_counter % 10 == 1:
-                try:
-                    #self.writer.flush()
-                    self.wr_Q.put(['dist', 'Output/v', v_batch.detach().cpu(), self.training_counter])
-                    self.wr_Q.put(['dist', 'Output/P', P_batch.detach().cpu(), self.training_counter])
-                    self.wr_Q.put(['dist', 'Output/r', r_batch.detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'Output/v', v_batch.detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'Output/P', P_batch.detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'Output/r', r_batch.detach().cpu(), self.training_counter])
 
-                    self.wr_Q.put(['dist', 'data/u', u_batch.detach().cpu(), self.training_counter])
-                    self.wr_Q.put(['dist', 'data/z', z_batch.detach().cpu(), self.training_counter])
-                    self.wr_Q.put(['dist', 'data/Pi', pi_batch.detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'data/u', u_batch.detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'data/z', z_batch.detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'data/Pi', pi_batch.detach().cpu(), self.training_counter])
 
-                    self.wr_Q.put(['scalar', 'Total_loss/train', loss.mean().detach().cpu(), self.training_counter])
-                    self.wr_Q.put(['scalar', 'Reward_loss/train', r_loss.mean().detach().cpu(), self.training_counter])
-                    self.wr_Q.put(['scalar', 'Value_loss/train', v_loss.mean().detach().cpu(), self.training_counter])
-                    self.wr_Q.put(['dist', 'Policy_loss/train', P_loss.detach().cpu(), self.training_counter])
-                    self.wr_Q.put(['scalar', 'learning_rate', self.scheduler.get_last_lr()[0].cpu(), self.training_counter])
-                except:
-                    return
+                self.wr_Q.put(['scalar', 'Total_loss/train', loss.mean().detach().cpu(), self.training_counter])
+                self.wr_Q.put(['scalar', 'Reward_loss/train', r_loss.mean().detach().cpu(), self.training_counter])
+                self.wr_Q.put(['scalar', 'Value_loss/train', v_loss.mean().detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'Policy_loss/train', P_loss.detach().cpu(), self.training_counter])
+                self.wr_Q.put(['scalar', 'learning_rate', self.scheduler.get_last_lr()[0].cpu(), self.training_counter])
             self.training_counter += 1
 
 
@@ -220,21 +211,15 @@ def train_ex_worker(ex_Q, f_model, g_model, h_model, experience_settings, traini
 def writer_worker(wr_Q):
     writer = SummaryWriter()
     while True:
-        f = open("debug.txt", "a")
         # Empty queue
         while not wr_Q.empty():
             type, name, value, index = wr_Q.get()
             if type == 'scalar':
-                print(value, file=f)
                 writer.add_scalar(name, value, index)
             elif type == 'dist':
-                print(value, file=f)
+                raise TypeError
                 writer.add_histogram(name, value, index)
             else:
-                print(type)
-
                 raise TypeError
 
-        print("sleeping", file=f)
-        f.close()
         time.sleep(10)
