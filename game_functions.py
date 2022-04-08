@@ -56,7 +56,6 @@ def gpu_worker(gpu_Q, input_shape, MCTS_settings, model, f_model, use_g_model):
             else:
                 # Case where worker uses f and h model
                 h_f_process(batch, pipe_queue, jobs_indexes, model, f_model)
-            time.sleep(0.1)
             # Update calibration
             if ((num_eval % (batch_test_length + 1)) == 0) and (not calibration_done):
                 time_spent = time.time() - t
