@@ -184,7 +184,7 @@ class model_trainer:
             print("finished a training round")
             if self.training_counter % 10 == 1:
                 print("Sending information to queue")
-                self.wr_Q.put(['dist', 'Output/v', v_batch.detach().numpy(), self.training_counter])
+                self.wr_Q.put(['dist', 'Output/v', v_batch.detach().cpu().numpy(), self.training_counter])
                 print("sucess sending first info")
                 self.wr_Q.put(['dist', 'Output/P', P_batch.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Output/r', r_batch.detach().cpu(), self.training_counter])
