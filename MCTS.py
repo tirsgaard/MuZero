@@ -235,6 +235,7 @@ def verify_w(w, node, MCTS_settings):
     try:
         assert(w==w_sum)
     except AssertionError:
+        test = 5
         #print("w was: ")
         #print(w)
         #print("w_sum was: ")
