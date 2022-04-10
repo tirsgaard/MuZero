@@ -142,12 +142,11 @@ def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZe
     while True:
         turns += 1
         #env.render()
-        # Generate new tree, to throw away old values
+        # Check for error
         root_node = generate_root(S_obs, h_Q, f_g_Q, h_send, h_rec, f_g_send, f_g_rec, MCTS_settings)
-        #root_node.set_illegal(env.illegal())
-        # Simulate MCTS
         root_node, normalizer = MCTS(root_node, f_g_Q, MCTS_settings)
-        verify_nodes(root_node, MCTS_settings)
+
+        # Generate new tree, to throw away old values
         if game_id % 100 == 0 and turns == 5:
             # Save tree search and image of env
             tree = map_tree(root_node, normalizer, game_id)
@@ -193,7 +192,8 @@ def sim_games(env_maker, f_model, g_model, h_model, EX_Q, MCTS_settings, MuZero_
     number_of_processes = MCTS_settings["number_of_threads"]
     # Function for generating games
     process_workers = []
-    # This is important for generating a worker with torch support
+    # This is important for generating a worker with torch support first
+    torch.multiprocessing.set_start_method('spawn', force=True)
     f_model.eval()  # Set model for evaluating
     g_model.eval()
     h_model.eval()
@@ -209,7 +209,6 @@ def sim_games(env_maker, f_model, g_model, h_model, EX_Q, MCTS_settings, MuZero_
 
     # Make process for gpu workers
     hidden_input_size = hidden_input_size = (MCTS_settings["action_size"][0]+1,) + MCTS_settings["hidden_S_size"]
-    torch.multiprocessing.set_start_method('spawn', force=True)
     process_workers.append(Process(target=gpu_worker, args=(gf_model_Q, hidden_input_size, MCTS_settings, g_model, f_model, True)))
     process_workers.append(Process(target=gpu_worker, args=(hf_model_Q, MCTS_settings["observation_size"], MCTS_settings, h_model, f_model, False)))
     # Start gpu and data_loader worker

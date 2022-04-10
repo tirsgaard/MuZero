@@ -213,7 +213,7 @@ def backup_node(stored_jobs, S_array, r_array, P_array, v_array, normalizer, MCT
 
 def verify_nodes(node, MCTS_settings):
     try:
-        assert(np.sum(node.N) == node.N_total-1)  # -1 to account for initial exploration
+        assert(np.sum(node.N) == (node.N_total-1))  # -1 to account for initial exploration
     except AssertionError:
         print("N was: ")
         print(np.sum(node.N))
@@ -231,7 +231,8 @@ def verify_w(w, node, MCTS_settings):
     gamma = MCTS_settings["gamma"]
     w_sum = node.N_total*node.r+gamma*node.v
     for action in node.action_edges:
-        w_sum += gamma*gamma*node.W[action]
+        # Sum over all values W of children
+        w_sum += gamma*node.W[action]
     try:
         assert(w==w_sum)
     except AssertionError:
