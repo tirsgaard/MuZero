@@ -155,7 +155,7 @@ class model_trainer:
             # Optimize
             self.optimizer.zero_grad()
             new_S2 = self.h_model.forward(S_batch)
-            new_S = new_S2[:, None]
+            new_S = new_S2
             for k in range(self.K):
                 P_batch, v_batch = self.f_model.forward(new_S)
                 Sa_batch = stack_a_torch(new_S, a_batch[:, k], self.hidden_S_size, self.action_size)

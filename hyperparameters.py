@@ -8,7 +8,7 @@ MuZero_settings = {"N_training_games": 200000,  # Total number of games to run p
                    }
 
 # Settings for experience replay and storing of values in general
-experience_settings = {"history_size": 125*10**3,  # The number of sequences of frames to store in memory
+experience_settings = {"history_size": 10**3,  # The number of sequences of frames to store in memory
                         "sequence_length": 200,  # The number of frames in each sequence
                         "epsilon": 0.25,  # Distributional value for action selection
                         "n_bootstrap": 10,  # Number of steps forward to bootstrap from
@@ -17,7 +17,7 @@ experience_settings = {"history_size": 125*10**3,  # The number of sequences of 
                    }
 
 # These are the settings for the Monte Carlo Tree Search (MCTS),
-MCTS_settings = {"n_parallel_explorations": 1,  # Number of pseudo-parrallel runs of the MCTS, note >16 reduces accuracy significantly
+MCTS_settings = {"n_parallel_explorations": 2,  # Number of pseudo-parrallel runs of the MCTS, note >16 reduces accuracy significantly
                  "action_size": (2,),  # size of action space
                  "observation_size": (4, ),  # shape of observation space
                  "hidden_S_size": (2, 2),  # Size of the hidden state
@@ -31,7 +31,7 @@ MCTS_settings = {"n_parallel_explorations": 1,  # Number of pseudo-parrallel run
 
 training_settings = {"train_batch_size": 32,  # Batch size on GPU during training
                      "num_epochs": 100,  # Maximum length of training epoch before break
-                     "lr_init": (10**-1)*125*10**3,  # Original Atari rate was 0.05
+                     "lr_init": (10**-1)*10**3,  # Original Atari rate was 0.05
                      "lr_decay_rate": 0.1,
                      "lr_decay_steps": 400e3,  # Original Atari was 350e3
                      "alpha": 1,
