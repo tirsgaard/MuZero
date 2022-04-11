@@ -12,13 +12,13 @@ else:
 def stack_a(S, a, hidden_shape, action_size):
     a_onehot = np.zeros((1, ) + action_size + hidden_shape)
     a_onehot[0, a, :, :] = 1/np.prod(action_size)  # One hot plane
-    S = np.concatenate([S, a_onehot], axis=1)
+    S = np.concatenate([S[None], a_onehot], axis=1)
     return S
 
 def stack_a_torch(S, a, hidden_shape, action_size):
     batch_size = a.shape[0]
     a_onehot = torch.zeros((batch_size,) + action_size + hidden_shape)
-    a_onehot[range(batch_size), a, : , :] = 1/torch.prod(action_size)  # One hot plane
+    a_onehot[range(batch_size), a, :, :] = 1/torch.prod(action_size)  # One hot plane
     Sa = torch.cat([S, a_onehot], dim=1)
     return Sa
 

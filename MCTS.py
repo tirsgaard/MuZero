@@ -40,7 +40,7 @@ class min_max_vals:
         self.min = Q if Q < self.min else self.min
 
     def norm(self, Q):
-        norm_Q  = Q
+        norm_Q = Q
         if self.min < self.max:  # Skip until normalisation until two values have been observed
             norm_Q = (Q - self.min) / (self.max - self.min)
         return norm_Q
@@ -54,7 +54,7 @@ def generate_root(S_obs, h_Q, f_g_Q, h_send, h_rec, f_g_send, f_g_rec, MCTS_sett
     #S_array, u_array, P_array, v_array = expand_node(stored_jobs, f_g_Q, f_g_send, f_g_rec, MCTS_settings)
     #normalizer = min_max_vals() # This will be thrown away, as the values found here are not used
     #backup_node(stored_jobs, S, u_array, P, v, normalizer, MCTS_settings)
-    root_node.explore(S, P, 0, v)
+    root_node.explore(S[0], P, 0, v)
     return root_node
 
 
@@ -199,7 +199,7 @@ def backup_node(stored_jobs, S_array, r_array, P_array, v_array, normalizer, MCT
     for S, current_path, current_node, leaf_node, a_chosen in stored_jobs:
         P = P_array[k]
         r = r_array[k][0]
-        S = S_array[k][None]
+        S = S_array[k]
         v = v_array[k][0]
 
         # Add explore information to leaf node
