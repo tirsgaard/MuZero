@@ -213,7 +213,7 @@ def sim_games(env_maker, f_model, g_model, h_model, EX_Q, MCTS_settings, MuZero_
     lock = Lock()
 
     # Make process for gpu workers
-    hidden_input_size = (MCTS_settings["action_size"][0]+1,) + MCTS_settings["hidden_S_size"]
+    hidden_input_size = (MCTS_settings["action_size"][0] + MCTS_settings["hidden_S_channel"],) + MCTS_settings["hidden_S_size"]
     process_workers.append(Process(target=gpu_worker, args=(gf_model_Q, hidden_input_size, MCTS_settings, g_model, f_model, True)))
     S_size = (experience_settings["past_obs"], ) + MCTS_settings["observation_size"]
     process_workers.append(Process(target=gpu_worker, args=(hf_model_Q, S_size, MCTS_settings, h_model, f_model, False)))
