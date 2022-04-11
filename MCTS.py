@@ -234,7 +234,7 @@ def verify_w(w, node, MCTS_settings):
         # Sum over all values W of children
         w_sum += gamma*node.W[action]
     try:
-        assert(w==w_sum)
+        assert(np.isclose(w, w_sum))
     except AssertionError:
         print("w was: ")
         print(w)
