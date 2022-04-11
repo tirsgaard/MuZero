@@ -148,7 +148,6 @@ class model_trainer:
                                                                                                             self.alpha,
                                                                                                             self.K)
             S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp = self.convert_torch([S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp])
-            z_batch = u_batch.clone()
             p_vals = []  # Number
             r_batches = []
             v_batches = []
