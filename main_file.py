@@ -13,6 +13,7 @@ from training_functions import save_model, load_latest_model, model_trainer, tra
 from torch.multiprocessing import Process, Queue, Pipe, Value, Lock, Manager, Pool, SimpleQueue
 from storage_functions import experience_replay_server
 from models import dummy_networkF, dummy_networkG, dummy_networkH
+from go_model import ResNet_f, ResNet_g, ConvResNet
 import gym
 import hyperparameters as conf
 
@@ -34,6 +35,12 @@ if __name__ == '__main__':
     g_model = dummy_networkG(hidden_input_size, (1,) + hidden_shape, 32)  # Model for predicting hidden state (S)
     h_model = dummy_networkH((experience_settings["past_obs"],) + MCTS_settings["observation_size"], hidden_shape,
                              32)  # Model for converting environment state to hidden state
+
+    h_model = ConvResNet(experience_settings["past_obs"], MCTS_settings["hidden_S_channel"], hidden_shape)
+    g_model = ResNet_g(MCTS_settings["hidden_S_channel"]+action_size[0], 32, hidden_shape, MCTS_settings["hidden_S_channel"], 128)
+
+    f_model = ResNet_f(MCTS_settings["hidden_S_channel"], 32, 4, action_size, 128)
+
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     # GPU things

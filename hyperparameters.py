@@ -21,6 +21,7 @@ MCTS_settings = {"n_parallel_explorations": 1,  # Number of pseudo-parrallel run
                  "action_size": (2,),  # size of action space
                  "observation_size": (4, ),  # shape of observation space
                  "hidden_S_size": (2, 2),  # Size of the hidden state
+                 "hidden_S_channel": 17,  # Size of the hidden state
                  "virtual_loss": 3,  # Magnitude of loss during parallel explorations
                  "number_of_threads": 4,  # Number of games / threads to run on CPU
                  "N_MCTS_sim": 20,  # Number of MCTS simulations for each action

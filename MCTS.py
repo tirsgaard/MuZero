@@ -181,7 +181,7 @@ def expand_node(stored_jobs, f_g_Q, f_g_send, f_g_rec, MCTS_settings):
     for S, current_path, current_node, new_node, a_chosen in stored_jobs:
         Sa_array.append(stack_a(S, a_chosen, hidden_S_size, action_size))
 
-    Sa_array = np.stack(Sa_array, axis=0)
+    Sa_array = np.concatenate(Sa_array, axis=0)
     # Get policy and value
     f_g_Q.put([Sa_array, f_g_send])
     S_array, r_array, P_array, v_array = f_g_rec.recv()
@@ -199,7 +199,7 @@ def backup_node(stored_jobs, S_array, r_array, P_array, v_array, normalizer, MCT
     for S, current_path, current_node, leaf_node, a_chosen in stored_jobs:
         P = P_array[k]
         r = r_array[k][0]
-        S = S_array[k]
+        S = S_array[k][None]
         v = v_array[k][0]
 
         # Add explore information to leaf node

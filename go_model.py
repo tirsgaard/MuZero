@@ -142,7 +142,7 @@ class ResNetEncoder(nn.Module):
 
 
 class policyHead(nn.Module):
-    def __init__(self, filter_size=256, output_size=9, policy_output_shape = (9,),
+    def __init__(self, filter_size=256, output_size=9, policy_output_shape=(9,),
                  activation='relu', block=ResNetBasicBlock, *args, **kwargs):
         super().__init__()
         self.output_size = output_size
@@ -155,10 +155,11 @@ class policyHead(nn.Module):
                                         activation_func(activation), nn.Softmax(dim=1))
 
     def forward(self, x):
+        bs = x.shape[0]
         x = self.conv_block(x)
-        x = x.view(-1, self.output_size * 2)
+        x = x.view(bs, self.output_size * 2)
         x = self.full_layer(x)
-        x = torch.reshape(x, (-1, ) + self.policy_output_shape)
+        x = torch.reshape(x, (bs, ) + self.policy_output_shape)
         return x
 
 
@@ -168,8 +169,8 @@ class valueHead(nn.Module):
         super().__init__()
         self.output_size = output_size
         self.conv_block = nn.Sequential(
-            nn.Conv2d(filter_size, 1, kernel_size=1, stride=1, padding=0, bias=False),
-            nn.BatchNorm2d(1),
+            nn.Conv2d(filter_size, filter_size, kernel_size=1, stride=1, padding=0, bias=False),
+            nn.BatchNorm2d(filter_size),
             activation_func(activation))
         self.ff_layer1 = nn.Sequential(nn.Linear(output_size, filter_size, bias=True),
                                        activation_func(activation), nn.BatchNorm1d(filter_size))
@@ -177,8 +178,9 @@ class valueHead(nn.Module):
         #self.tanh_layer = nn.Tanh()
 
     def forward(self, x):
+        bs = x.shape[0]
         x = self.conv_block(x)
-        x = x.view(-1, self.output_size)
+        x = x.view(bs, self.output_size)
         x = self.ff_layer1(x)
         x = self.ff_layer2(x)
         #x = self.tanh_layer(x)
@@ -204,9 +206,61 @@ class ConvResNet(nn.Module):
         #self.n_layers = np.log2(input_size/output_size)
         #assert(self.n_layers.is_integer())
         self.res_block = ResNetEncoder(in_channels=in_channels, blocks_sizes=[filter_size], deepths=[3], *args, **kwargs)
+        self.in_channels = in_channels
+        self.filter_size = filter_size
         self.output_shape = output_shape
 
     def forward(self, x):
+        BS = x.shape[0]
+        x = torch.reshape(x, (BS, self.in_channels, ) + self.output_shape)
         x = self.res_block(x)
-        x = torch.reshape(x, (-1, ) + self.output_shape)
+        x = torch.reshape(x, (BS, self.filter_size) + self.output_shape)
         return x
+
+
+class ResNet_f(nn.Module):
+    def __init__(self, in_channels, filter_size, output_size, policy_output_shape, value_size, *args, **kwargs):
+        super().__init__()
+        self.encoder = ResNetEncoder(in_channels, blocks_sizes=[filter_size], *args, **kwargs)
+        self.policyHead = policyHead(filter_size, output_size, policy_output_shape, *args, **kwargs)
+        self.valueHead = valueHead(filter_size, value_size, *args, **kwargs)
+
+    def forward(self, x):
+        x = self.encoder(x)
+        policy = self.policyHead(x)
+        value = self.valueHead(x)
+        return [policy, value]
+
+
+class StateHead(nn.Module):
+    def __init__(self, filter_size=256, input_channel=9, output_shape=(9,), output_channel=32,
+                 activation='relu', block=ResNetBasicBlock, *args, **kwargs):
+        super().__init__()
+        self.input_channel = input_channel
+        self.output_channel = output_channel
+        self.output_shape = output_shape
+        self.conv_block = nn.Sequential(
+            nn.Conv2d(filter_size, output_channel, kernel_size=1, stride=1, padding=0, bias=False),
+            nn.BatchNorm2d(output_channel),
+            activation_func(activation))
+
+    def forward(self, x):
+        bs = x.shape[0]
+        x = self.conv_block(x)
+        #x = x.view(bs, self.output_size * 2)
+        x = torch.reshape(x, (bs, self.output_channel) + self.output_shape)
+        return x
+
+class ResNet_g(nn.Module):
+    def __init__(self, in_channels, filter_size, policy_output_shape, output_channel, value_size, *args, **kwargs):
+        super().__init__()
+        self.encoder = ResNetEncoder(in_channels, blocks_sizes=[filter_size], *args, **kwargs)
+        self.StateHead = StateHead(filter_size, filter_size, policy_output_shape, output_channel, *args, **kwargs)
+        self.valueHead = valueHead(filter_size, value_size, *args, **kwargs)
+
+    def forward(self, x):
+        x = self.encoder(x)
+        state = self.StateHead(x)
+        value = self.valueHead(x)
+        return [state, value]
+

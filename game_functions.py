@@ -13,6 +13,8 @@ import torch
 
 def gpu_worker(gpu_Q, input_shape, MCTS_settings, model, f_model, use_g_model):
     torch.backends.cudnn.benchmark = True
+    model.eval()
+    f_model.eval()
     with torch.no_grad():
         batch_test_length = 1000
         n_parallel_explorations = MCTS_settings["n_parallel_explorations"]
