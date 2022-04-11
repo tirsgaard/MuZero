@@ -4,6 +4,7 @@ MuZero_settings = {"N_training_games": 200000,  # Total number of games to run p
                     "temp_switch": 16,  # Number of turns before other temperature measure is used
                     "eta_par": 0.03,  # Distributional value for action selection
                     "epsilon": 0.25,  # Distributional value for action selection
+                   "save_image": False,  # Save image of environment when MCT is saved
                    }
 
 # Settings for experience replay and storing of values in general
