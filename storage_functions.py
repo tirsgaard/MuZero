@@ -50,7 +50,7 @@ class experience_replay_server:
         elif len(seq_list) == 1:
             # Unreference dictionary to fix memory leak
             old_game_id = self.game_id[self.P_replace_idx]
-            self.game_to_seq.pop(old_game_id)
+            self.game_to_seq.pop(old_game_id, None)
             seq_list.popleft()
 
         # It can be guaranteed this will not belong to another game,
