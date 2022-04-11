@@ -49,7 +49,7 @@ class dummy_networkG(nn.Module):
         # Reward state
         reward = self.activation2_1(self.layer2_1(x_flat))
         reward = self.layer2_2(reward)
-        reward = torch.rand(reward.shape)-0.5 + reward
+        reward = reward
         return [S, reward]
 
 class dummy_networkH(nn.Module):
@@ -97,5 +97,5 @@ class dummy_networkF(nn.Module):
         # Value head
         value = self.activation2_1(self.layer2_1(x_flat))
         value = self.layer2_2(value)
-        value = torch.rand(value.shape) + value -0.5
+        value = value
         return [policy, value]

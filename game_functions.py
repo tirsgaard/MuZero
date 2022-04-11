@@ -121,12 +121,12 @@ def temperature_scale(N, temp):
 def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZero_settings, experience_settings):
     # Hyperparameters
     temp_switch = MuZero_settings["temp_switch"]  # Number of turns before other temperature measure is used
-    eta_par = MuZero_settings["eta_par"]
-    epsilon = MuZero_settings["epsilon"]
     action_size = MCTS_settings["action_size"]
+    past_obs = experience_settings["past_obs"]  # Number of previous frames to give to agent
     wr_Q = MCTS_settings["Q_writer"]
     n_actions = np.prod(action_size)
     ER = experience_replay_sender(EX_Q, agent_id, MCTS_settings["gamma"], experience_settings)
+    frame_stack = frame_stacker(past_obs)
 
     # Define pipe for f-, g-, h-model gpu workers
     f_g_rec, f_g_send = Pipe(False)
@@ -137,7 +137,8 @@ def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZe
     total_R = 0
     turns = 0
     # Start game
-    S_obs = env.reset()
+    F = env.reset()
+    S_obs = frame_stack.get_stack(F)
     # Loop over all turns in environment
     while True:
         turns += 1
@@ -164,11 +165,12 @@ def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZe
 
         # Pick move
         root_node = root_node.action_edges[action]
-        S_new_obs, r, done, info = env.step(action)
+        F_new, r, done, info = env.step(action)
         total_R += r
         # Save Data
-        ER.store(S_obs, action, r, done, root_node.v, pi_legal)
-        S_obs = S_new_obs
+        ER.store(F, action, r, done, root_node.v, pi_legal)
+        F = F_new
+        S_obs = frame_stack.get_stack(F)
         if done:
             # Check for termination of environment
             wr_Q.put(['scalar', 'environment/steps', turns, game_id])
@@ -210,7 +212,8 @@ def sim_games(env_maker, f_model, g_model, h_model, EX_Q, MCTS_settings, MuZero_
     # Make process for gpu workers
     hidden_input_size = hidden_input_size = (MCTS_settings["action_size"][0]+1,) + MCTS_settings["hidden_S_size"]
     process_workers.append(Process(target=gpu_worker, args=(gf_model_Q, hidden_input_size, MCTS_settings, g_model, f_model, True)))
-    process_workers.append(Process(target=gpu_worker, args=(hf_model_Q, MCTS_settings["observation_size"], MCTS_settings, h_model, f_model, False)))
+    S_size = experience_settings["past_obs"] + MCTS_settings["observation_size"]
+    process_workers.append(Process(target=gpu_worker, args=(hf_model_Q, S_size, MCTS_settings, h_model, f_model, False)))
     # Start gpu and data_loader worker
     for p in process_workers:
         p.start()
@@ -247,3 +250,26 @@ def sim_games(env_maker, f_model, g_model, h_model, EX_Q, MCTS_settings, MuZero_
     # Close processes
     for p in process_workers:
         p.terminate()
+
+
+class frame_stacker:
+    def __init__(self, n_stack, boundry_type="copy"):
+        self.frames = deque(maxlen=n_stack)
+        self.n_stack = n_stack
+        self.boundry_type = boundry_type
+
+    def get_stack(self, F):
+        if len(self.frames) == 0:
+            # Case of initial observation
+            if self.boundry_type == "copy":
+                self.frames.extend([F]*self.n_stack)
+        # Add observation
+        self.frames.append(F)
+        # Stack frames to numpy array and send back
+        S = np.stack(self.frames)
+        return S
+
+
+
+
+
