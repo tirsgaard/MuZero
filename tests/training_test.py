@@ -2,11 +2,13 @@ from storage_functions import experience_replay_sender, experience_replay_server
 import time
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
+from torch.multiprocessing import Queue
 from training_functions import model_trainer
 from go_model import ResNet, ConvResNet, ResNetBasicBlock
 
 MCTS_settings = {"n_parallel_explorations": 4,  # Number of pseudo-parrallel runs of the MCTS, note >16 reduces accuracy significantly
                  "action_size": (4,),  # size of action space
+                 "hidden_S_size": (2, 2),  # Size of the hidden state
                  "observation_size": (3,3),  # shape of observation space
                  "gamma": 0.9}  # parameter for pUCT selection
 
@@ -26,7 +28,10 @@ training_settings = {"train_batch_size": 32,  # Batch size on GPU during trainin
                      "lr_decay_steps": 10000,  # Original Atari was 350e3
                      "momentum": 0  # Original was 0.9
                      }
-
+Q_writer = Queue()
+training_settings["Q_writer"] = Q_writer
+experience_settings["Q_writer"] = Q_writer
+MCTS_settings["Q_writer"] = Q_writer
 
 gamma = MCTS_settings["gamma"]
 obs_size = MCTS_settings["observation_size"]
@@ -34,9 +39,9 @@ action_size = MCTS_settings["action_size"]
 past_obs = experience_settings["past_obs"]
 
 K = experience_settings["K"]
-EX_server = experience_replay_server(experience_settings, MCTS_settings)
-get_ex_Q = EX_server.get_Q()
-EX_sender = experience_replay_sender(get_ex_Q, 1, gamma, experience_settings)
+ex_Q = Queue()
+EX_server = experience_replay_server(ex_Q, experience_settings, MCTS_settings)
+EX_sender = experience_replay_sender(ex_Q, 1, gamma, experience_settings)
 np.random.seed(1)
 N_episodes = 50
 max_episode_len = 100
@@ -46,7 +51,7 @@ for i in range(N_episodes):
     # Sample epiosde length
     episode_len = np.random.randint(1, max_episode_len)
 
-    S_stack = np.random.rand(episode_len, obs_size[0], obs_size[1])
+    S_stack = np.random.rand(episode_len, obs_size[0], obs_size[1]).astype(np.float32)
     S_stack[:, 0, 0] = np.arange(episode_len)
     #for ii in range(obs_size[0]):
     #    for jj in range(obs_size[1]):
@@ -62,7 +67,7 @@ for i in range(N_episodes):
 
     for j in range(episode_len):
         EX_sender.store(S_stack[j], a_stack[j], r_stack[j], done_stack[j], v_stack[j], pi_stack[j])
-        while not get_ex_Q.empty():
+        while not ex_Q.empty():
             EX_server.recv_store()
     total_samples += episode_len
 
@@ -173,9 +178,9 @@ for lr in lr_list:
     g_model = dummy_networkG(hidden_shape, hidden_shape, 64)
     h_model = dummy_networkH((past_obs,) + obs_size, hidden_shape, 64)
     writer = SummaryWriter()
-    trainer = model_trainer(writer, EX_server, experience_settings, training_settings, MCTS_settings)
+    trainer = model_trainer(f_model, g_model, h_model, EX_server, experience_settings, training_settings, MCTS_settings)
     trainer.lr_init = lr
-    trainer.train(f_model, g_model, h_model)
+    trainer.train()
 
 
 

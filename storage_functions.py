@@ -1,7 +1,6 @@
 import numpy as np
 from collections import deque, defaultdict
-from multiprocessing import Queue
-#from torch.multiprocessing import Queue
+from torch.multiprocessing import Queue
 class experience_replay_server:
     def __init__(self, ex_Q, experience_settings, MCTS_settings):
         self.hist_size = experience_settings["history_size"]  # The number of sequences of frames to store in memory
