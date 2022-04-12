@@ -212,21 +212,21 @@ class model_trainer:
                 self.wr_Q.put(['dist', 'training/model_g/layer18', list(self.g_model.parameters())[18].detach().cpu(), self.training_counter])
 
                 # Gradients
-                self.wr_Q.put(['dist', 'gradient/model_f/layer0', list(self.f_model.parameters())[0].grad.detach().cpu(), self.training_counter])
-                self.wr_Q.put(['dist', 'gradient/model_f/layer6', list(self.f_model.parameters())[6].grad.detach().cpu(), self.training_counter])
-                self.wr_Q.put(['dist', 'gradient/model_f/layer17', list(self.f_model.parameters())[17].grad.detach().cpu(), self.training_counter])
-                self.wr_Q.put(['dist', 'gradient/model_f/layer18', list(self.f_model.parameters())[18].grad.detach().cpu(), self.training_counter])
-                self.wr_Q.put(['dist', 'gradient/model_f/layer22', list(self.f_model.parameters())[22].grad.detach().cpu(), self.training_counter])
+                self.wr_Q.put(['scalar', 'gradient/model_f/layer0', list(self.f_model.parameters())[0].grad.mean().detach().cpu(), self.training_counter])
+                self.wr_Q.put(['scalar', 'gradient/model_f/layer6', list(self.f_model.parameters())[6].grad.mean().detach().cpu(), self.training_counter])
+                self.wr_Q.put(['scalar', 'gradient/model_f/layer17', list(self.f_model.parameters())[17].grad.mean().detach().cpu(), self.training_counter])
+                self.wr_Q.put(['scalar', 'gradient/model_f/layer18', list(self.f_model.parameters())[18].grad.mean().detach().cpu(), self.training_counter])
+                self.wr_Q.put(['scalar', 'gradient/model_f/layer22', list(self.f_model.parameters())[22].grad.mean().detach().cpu(), self.training_counter])
 
-                self.wr_Q.put(['dist', 'gradient/model_h/layer0', list(self.h_model.parameters())[0].grad.detach().cpu(), self.training_counter])
-                self.wr_Q.put(['dist', 'gradient/model_h/layer3', list(self.h_model.parameters())[3].grad.detach().cpu(), self.training_counter])
-                self.wr_Q.put(['dist', 'gradient/model_h/layer9', list(self.h_model.parameters())[9].grad.detach().cpu(), self.training_counter])
-                self.wr_Q.put(['dist', 'gradient/model_h/layer18', list(self.h_model.parameters())[18].grad.detach().cpu(), self.training_counter])
+                self.wr_Q.put(['scalar', 'gradient/model_h/layer0', list(self.h_model.parameters())[0].grad.mean().detach().cpu(), self.training_counter])
+                self.wr_Q.put(['scalar', 'gradient/model_h/layer3', list(self.h_model.parameters())[3].grad.mean().detach().cpu(), self.training_counter])
+                self.wr_Q.put(['scalar', 'gradient/model_h/layer9', list(self.h_model.parameters())[9].grad.mean().detach().cpu(), self.training_counter])
+                self.wr_Q.put(['scalar', 'gradient/model_h/layer18', list(self.h_model.parameters())[18].grad.mean().detach().cpu(), self.training_counter])
 
-                self.wr_Q.put(['dist', 'gradient/model_g/layer0', list(self.g_model.parameters())[0].grad.detach().cpu(), self.training_counter])
-                self.wr_Q.put(['dist', 'gradient/model_g/layer3', list(self.g_model.parameters())[3].grad.detach().cpu(), self.training_counter])
-                self.wr_Q.put(['dist', 'gradient/model_g/layer9', list(self.g_model.parameters())[9].grad.detach().cpu(), self.training_counter])
-                self.wr_Q.put(['dist', 'gradient/model_g/layer18', list(self.g_model.parameters())[18].grad.detach().cpu(), self.training_counter])
+                self.wr_Q.put(['scalar', 'gradient/model_g/layer0', list(self.g_model.parameters())[0].grad.mean().detach().cpu(), self.training_counter])
+                self.wr_Q.put(['scalar', 'gradient/model_g/layer3', list(self.g_model.parameters())[3].grad.mean().detach().cpu(), self.training_counter])
+                self.wr_Q.put(['scalar', 'gradient/model_g/layer9', list(self.g_model.parameters())[9].grad.mean().detach().cpu(), self.training_counter])
+                self.wr_Q.put(['scalar', 'gradient/model_g/layer18', list(self.g_model.parameters())[18].grad.mean().detach().cpu(), self.training_counter])
 
 
             self.training_counter += 1
