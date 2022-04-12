@@ -61,7 +61,14 @@ def gpu_worker(gpu_Q, input_shape, MCTS_settings, model, f_model, use_g_model):
                 h_f_process(batch, pipe_queue, jobs_indexes, model, f_model)
 
             if num_eval % 10000 == 0:
-                wr_Q.put(['dist', 'gpu_worker/model_f', list(f_model.parameters())[6].detach().cpu(), num_eval])
+                wr_Q.put(['dist', 'model_f/layer0', list(f_model.parameters())[0].detach().cpu(), num_eval])
+                wr_Q.put(['dist', 'model_f/layer3', list(f_model.parameters())[3].detach().cpu(), num_eval])
+                wr_Q.put(['dist', 'model_f/layer6', list(f_model.parameters())[6].detach().cpu(), num_eval])
+                wr_Q.put(['dist', 'model_f/layer9', list(f_model.parameters())[9].detach().cpu(), num_eval])
+                wr_Q.put(['dist', 'model_f/layer17', list(f_model.parameters())[17].detach().cpu(), num_eval])
+                wr_Q.put(['dist', 'model_f/layer18', list(f_model.parameters())[18].detach().cpu(), num_eval])
+                wr_Q.put(['dist', 'model_f/layer21', list(f_model.parameters())[21].detach().cpu(), num_eval])
+                wr_Q.put(['dist', 'model_f/layer22', list(f_model.parameters())[22].detach().cpu(), num_eval])
 
             # Update calibration
             if ((num_eval % (batch_test_length + 1)) == 0) and (not calibration_done):
