@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import torch
 
 def gpu_worker(gpu_Q, input_shape, MCTS_settings, model, f_model, use_g_model):
+    wr_Q = MCTS_settings["Q_writer"]
     torch.backends.cudnn.benchmark = True
     model.eval()
     f_model.eval()
@@ -58,6 +59,10 @@ def gpu_worker(gpu_Q, input_shape, MCTS_settings, model, f_model, use_g_model):
             else:
                 # Case where worker uses f and h model
                 h_f_process(batch, pipe_queue, jobs_indexes, model, f_model)
+
+            if num_eval % 10000 == 0:
+                wr_Q.put(['dist', 'gpu_worker/model_f', list(f_model.parameters())[6].detach().cpu(), num_eval])
+
             # Update calibration
             if ((num_eval % (batch_test_length + 1)) == 0) and (not calibration_done):
                 time_spent = time.time() - t
