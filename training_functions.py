@@ -194,21 +194,21 @@ class model_trainer:
                 self.wr_Q.put(['scalar', 'learning_rate', self.scheduler.get_last_lr()[0], self.training_counter])
 
             if self.training_counter % 10000 == 0:
-                self.wr_Q.put(['dist', 'model_f/layer0', list(self.f_model.parameters())[0].detach().cpu(), self.training_counter])
-                self.wr_Q.put(['dist', 'model_f/layer6', list(self.f_model.parameters())[6].detach().cpu(), self.training_counter])
-                self.wr_Q.put(['dist', 'model_f/layer17', list(self.f_model.parameters())[17].detach().cpu(), self.training_counter])
-                self.wr_Q.put(['dist', 'model_f/layer18', list(self.f_model.parameters())[18].detach().cpu(), self.training_counter])
-                self.wr_Q.put(['dist', 'model_f/layer22', list(self.f_model.parameters())[22].detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'training/model_f/layer0', list(self.f_model.parameters())[0].detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'training/model_f/layer6', list(self.f_model.parameters())[6].detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'training/model_f/layer17', list(self.f_model.parameters())[17].detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'training/model_f/layer18', list(self.f_model.parameters())[18].detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'training/model_f/layer22', list(self.f_model.parameters())[22].detach().cpu(), self.training_counter])
 
-                self.wr_Q.put(['dist', 'model_h/layer0', list(self.h_model.parameters())[0].detach().cpu(), self.training_counter])
-                self.wr_Q.put(['dist', 'model_h/layer3', list(self.h_model.parameters())[3].detach().cpu(), self.training_counter])
-                self.wr_Q.put(['dist', 'model_h/layer9', list(self.h_model.parameters())[9].detach().cpu(), self.training_counter])
-                self.wr_Q.put(['dist', 'model_h/layer18', list(self.h_model.parameters())[18].detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'training/model_h/layer0', list(self.h_model.parameters())[0].detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'training/model_h/layer3', list(self.h_model.parameters())[3].detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'training/model_h/layer9', list(self.h_model.parameters())[9].detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'training/model_h/layer18', list(self.h_model.parameters())[18].detach().cpu(), self.training_counter])
 
-                self.wr_Q.put(['dist', 'model_g/layer0', list(self.g_model.parameters())[0].detach().cpu(), self.training_counter])
-                self.wr_Q.put(['dist', 'model_g/layer3', list(self.g_model.parameters())[3].detach().cpu(), self.training_counter])
-                self.wr_Q.put(['dist', 'model_g/layer9', list(self.g_model.parameters())[9].detach().cpu(), self.training_counter])
-                self.wr_Q.put(['dist', 'model_g/layer18', list(self.g_model.parameters())[18].detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'training/model_g/layer0', list(self.g_model.parameters())[0].detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'training/model_g/layer3', list(self.g_model.parameters())[3].detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'training/model_g/layer9', list(self.g_model.parameters())[9].detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'training/model_g/layer18', list(self.g_model.parameters())[18].detach().cpu(), self.training_counter])
 
             self.training_counter += 1
 
