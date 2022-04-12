@@ -123,7 +123,7 @@ class model_trainer:
         self.f_model = f_model
         self.g_model = g_model
         self.h_model = h_model
-        model_list = list(f_model.parameters()) + list(h_model.parameters()) + list(g_model.parameters())
+        model_list = list(self.f_model.parameters()) + list(self.h_model.parameters()) + list(self.g_model.parameters())
         self.optimizer = optim.SGD(model_list, lr=self.lr_init)
         gamma = self.lr_decay_rate ** (1 / self.lr_decay_steps)
         self.scheduler = StepLR(self.optimizer, step_size=1, gamma=gamma)

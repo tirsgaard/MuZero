@@ -100,9 +100,7 @@ def f_g_process(batch, pipe_queue, jobs_indexes, g_model, f_model, num_eval, wr_
     if num_eval % 10000 == 0:
         wr_Q.put(['dist', 'model_g/layer0', list(g_model.parameters())[0].detach().cpu(), num_eval])
         wr_Q.put(['dist', 'model_g/layer3', list(g_model.parameters())[3].detach().cpu(), num_eval])
-        wr_Q.put(['dist', 'model_g/layer6', list(g_model.parameters())[6].detach().cpu(), num_eval])
         wr_Q.put(['dist', 'model_g/layer9', list(g_model.parameters())[9].detach().cpu(), num_eval])
-        wr_Q.put(['dist', 'model_g/layer17', list(g_model.parameters())[17].detach().cpu(), num_eval])
         wr_Q.put(['dist', 'model_g/layer18', list(g_model.parameters())[18].detach().cpu(), num_eval])
 
 
@@ -126,19 +124,14 @@ def h_f_process(batch, pipe_queue, jobs_indexes, h_model, f_model, num_eval, wr_
 
     if num_eval % 10000 == 0:
         wr_Q.put(['dist', 'model_f/layer0', list(f_model.parameters())[0].detach().cpu(), num_eval])
-        wr_Q.put(['dist', 'model_f/layer3', list(f_model.parameters())[3].detach().cpu(), num_eval])
         wr_Q.put(['dist', 'model_f/layer6', list(f_model.parameters())[6].detach().cpu(), num_eval])
-        wr_Q.put(['dist', 'model_f/layer9', list(f_model.parameters())[9].detach().cpu(), num_eval])
         wr_Q.put(['dist', 'model_f/layer17', list(f_model.parameters())[17].detach().cpu(), num_eval])
         wr_Q.put(['dist', 'model_f/layer18', list(f_model.parameters())[18].detach().cpu(), num_eval])
-        wr_Q.put(['dist', 'model_f/layer21', list(f_model.parameters())[21].detach().cpu(), num_eval])
         wr_Q.put(['dist', 'model_f/layer22', list(f_model.parameters())[22].detach().cpu(), num_eval])
 
         wr_Q.put(['dist', 'model_h/layer0', list(h_model.parameters())[0].detach().cpu(), num_eval])
         wr_Q.put(['dist', 'model_h/layer3', list(h_model.parameters())[3].detach().cpu(), num_eval])
-        wr_Q.put(['dist', 'model_h/layer6', list(h_model.parameters())[6].detach().cpu(), num_eval])
         wr_Q.put(['dist', 'model_h/layer9', list(h_model.parameters())[9].detach().cpu(), num_eval])
-        wr_Q.put(['dist', 'model_h/layer17', list(h_model.parameters())[17].detach().cpu(), num_eval])
         wr_Q.put(['dist', 'model_h/layer18', list(h_model.parameters())[18].detach().cpu(), num_eval])
 
 def temperature_scale(N, temp):
