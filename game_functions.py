@@ -55,20 +55,10 @@ def gpu_worker(gpu_Q, input_shape, MCTS_settings, model, f_model, use_g_model):
             # Evaluate and send jobs
             if use_g_model:
                 # Case where worker uses f and g model
-                f_g_process(batch, pipe_queue, jobs_indexes, model, f_model)
+                f_g_process(batch, pipe_queue, jobs_indexes, model, f_model, num_eval, wr_Q)
             else:
                 # Case where worker uses f and h model
-                h_f_process(batch, pipe_queue, jobs_indexes, model, f_model)
-
-            if num_eval % 10000 == 0:
-                wr_Q.put(['dist', 'model_f/layer0', list(f_model.parameters())[0].detach().cpu(), num_eval])
-                wr_Q.put(['dist', 'model_f/layer3', list(f_model.parameters())[3].detach().cpu(), num_eval])
-                wr_Q.put(['dist', 'model_f/layer6', list(f_model.parameters())[6].detach().cpu(), num_eval])
-                wr_Q.put(['dist', 'model_f/layer9', list(f_model.parameters())[9].detach().cpu(), num_eval])
-                wr_Q.put(['dist', 'model_f/layer17', list(f_model.parameters())[17].detach().cpu(), num_eval])
-                wr_Q.put(['dist', 'model_f/layer18', list(f_model.parameters())[18].detach().cpu(), num_eval])
-                wr_Q.put(['dist', 'model_f/layer21', list(f_model.parameters())[21].detach().cpu(), num_eval])
-                wr_Q.put(['dist', 'model_f/layer22', list(f_model.parameters())[22].detach().cpu(), num_eval])
+                h_f_process(batch, pipe_queue, jobs_indexes, model, f_model, num_eval, wr_Q)
 
             # Update calibration
             if ((num_eval % (batch_test_length + 1)) == 0) and (not calibration_done):
@@ -87,7 +77,7 @@ def gpu_worker(gpu_Q, input_shape, MCTS_settings, model, f_model, use_g_model):
                 num_eval = 0
 
 
-def f_g_process(batch, pipe_queue, jobs_indexes, g_model, f_model):
+def f_g_process(batch, pipe_queue, jobs_indexes, g_model, f_model, num_eval, wr_Q):
     # Function for processing jobs for booth dynamic (g) and value (f) evaluation model
     # Process data
     S, u = g_model.forward(batch)
@@ -107,8 +97,16 @@ def f_g_process(batch, pipe_queue, jobs_indexes, g_model, f_model):
         pipe_queue.popleft().send([S_indexed, u_indexed, P_indexed, v_indexed])
         index_start = index_end
 
+    if num_eval % 10000 == 0:
+        wr_Q.put(['dist', 'model_g/layer0', list(g_model.parameters())[0].detach().cpu(), num_eval])
+        wr_Q.put(['dist', 'model_g/layer3', list(g_model.parameters())[3].detach().cpu(), num_eval])
+        wr_Q.put(['dist', 'model_g/layer6', list(g_model.parameters())[6].detach().cpu(), num_eval])
+        wr_Q.put(['dist', 'model_g/layer9', list(g_model.parameters())[9].detach().cpu(), num_eval])
+        wr_Q.put(['dist', 'model_g/layer17', list(g_model.parameters())[17].detach().cpu(), num_eval])
+        wr_Q.put(['dist', 'model_g/layer18', list(g_model.parameters())[18].detach().cpu(), num_eval])
 
-def h_f_process(batch, pipe_queue, jobs_indexes, h_model, f_model):
+
+def h_f_process(batch, pipe_queue, jobs_indexes, h_model, f_model, num_eval, wr_Q):
     # Function for processing jobs for booth dynamic (g) and value (f) evaluation model
     # Process data
     S = h_model.forward(batch)
@@ -126,6 +124,22 @@ def h_f_process(batch, pipe_queue, jobs_indexes, h_model, f_model):
         pipe_queue.popleft().send([S_indexed, P_indexed, v_indexed])
         index_start = index_end
 
+    if num_eval % 10000 == 0:
+        wr_Q.put(['dist', 'model_f/layer0', list(f_model.parameters())[0].detach().cpu(), num_eval])
+        wr_Q.put(['dist', 'model_f/layer3', list(f_model.parameters())[3].detach().cpu(), num_eval])
+        wr_Q.put(['dist', 'model_f/layer6', list(f_model.parameters())[6].detach().cpu(), num_eval])
+        wr_Q.put(['dist', 'model_f/layer9', list(f_model.parameters())[9].detach().cpu(), num_eval])
+        wr_Q.put(['dist', 'model_f/layer17', list(f_model.parameters())[17].detach().cpu(), num_eval])
+        wr_Q.put(['dist', 'model_f/layer18', list(f_model.parameters())[18].detach().cpu(), num_eval])
+        wr_Q.put(['dist', 'model_f/layer21', list(f_model.parameters())[21].detach().cpu(), num_eval])
+        wr_Q.put(['dist', 'model_f/layer22', list(f_model.parameters())[22].detach().cpu(), num_eval])
+
+        wr_Q.put(['dist', 'model_h/layer0', list(h_model.parameters())[0].detach().cpu(), num_eval])
+        wr_Q.put(['dist', 'model_h/layer3', list(h_model.parameters())[3].detach().cpu(), num_eval])
+        wr_Q.put(['dist', 'model_h/layer6', list(h_model.parameters())[6].detach().cpu(), num_eval])
+        wr_Q.put(['dist', 'model_h/layer9', list(h_model.parameters())[9].detach().cpu(), num_eval])
+        wr_Q.put(['dist', 'model_h/layer17', list(h_model.parameters())[17].detach().cpu(), num_eval])
+        wr_Q.put(['dist', 'model_h/layer18', list(h_model.parameters())[18].detach().cpu(), num_eval])
 
 def temperature_scale(N, temp):
     N_temp = N**temp
