@@ -67,7 +67,7 @@ class experience_replay_server:
         p = np.zeros(self.seq_size, dtype="float")
         # Pad p with 0 to avoid sampling empty states when termination has happened
         end_index = (1-self.K) if (v_array.shape[0]+1-self.past_obs)>self.seq_size else v_array.shape[0]
-        val_len = v_array.shape[0] + 1 - self.past_obs
+        val_len = v_array.shape[0] + (self.past_obs>0) - self.past_obs
         p[0:val_len] = np.abs(v_array - z_array)[(self.past_obs-1):end_index]
         start_idx = self.P_replace_idx * self.seq_size
         end_idx = (self.P_replace_idx + 1) * self.seq_size
@@ -104,11 +104,12 @@ class experience_replay_server:
         for i in range(batch_size):
             S, a, r, done, pi, z = self.get_sample(batch_idx[i], K)
             pad_length = self.K - len(z)
+            # Pad samples if a value after termination extends into K length
             if pad_length != 0:
-                a = np.pad(a, ((0, pad_length)), mode='constant', constant_values=0)
+                a = np.pad(a, (0, pad_length), mode='constant', constant_values=0)
                 r = np.pad(r, (0, pad_length), mode='constant', constant_values=0)
                 done = np.pad(done, (0, pad_length), mode='constant', constant_values=1)
-                pi = np.pad(pi, ((0, pad_length), (0, 0)), mode='constant', constant_values=0)
+                pi = np.pad(pi, ((0, pad_length), (0, 0)), mode='constant', constant_values=1/len(pi))  # Assume equal taken action
                 z = np.pad(z, (0, pad_length), mode='constant', constant_values=0)
 
             S_batch.append(S)
@@ -129,6 +130,7 @@ class experience_replay_server:
     def update_weightings(self, new_weightings, indexes):
         self.P[indexes] = new_weightings
 
+    """
     def batch_sample(self, batch_idx, K):
         hist_idx = batch_idx // self.seq_size
         seq_idx = self.past_obs - 1 + (batch_idx % self.seq_size)
@@ -152,7 +154,7 @@ class experience_replay_server:
             z = z_array[seq_idx:seq_idx_end]
             undershoot = seq_idx + 1 - self.past_obs  # Case where past frames goes back to previous block
             S = S_array[undershoot:(seq_idx + 1)]
-
+            # Pad samples if a value after termination extends into K length
             pad_length = self.K - len(z)
             if pad_length != 0:
                 a = np.pad(a, ((0, pad_length), (0, 0)), mode='constant', constant_values=0)
@@ -174,7 +176,7 @@ class experience_replay_server:
         done_batch = np.stack(done_batch)
         pi_batch = np.stack(pi_batch)
         z_batch = np.stack(z_batch)
-
+    """
     def get_sample(self, batch_idx, K):
         # Get values from storage
         hist_idx = batch_idx // self.seq_size
@@ -221,9 +223,10 @@ class experience_replay_server:
 
 class bootstrap_returner:
     # Class for handling the delay in values, when n-step bootstrap return is used
-    def __init__(self, n, gamma):
+    def __init__(self, n, gamma, K):
         self.n = n  # Number of steps to bootstrap from
         self.gamma = gamma
+        self.K = K
         self.r_list = deque()
         self.gamma_mask = gamma ** np.arange(n)
         self.step = 0  # Number of steps run so far
@@ -244,9 +247,16 @@ class bootstrap_returner:
             z = self.iterate(r, v)
             return [z]
         else:
+            n_return = self.n  # Number of values to return
             # Case where environment is done and all values needs to be calculated
-            z_list = [self.iterate(r, 0)]  # First value adds r in case of terminal reward
-            for i in range(1, self.n):
+            if len(self.r_list)<(self.n-1):  # -1 to account for value of r has not been added yet
+                # Case where early termination of environment happened, and list was not filled up
+                n_return = len(self.r_list)  # A value for each case in r_list needs to be added
+                for i in range(self.n-len(self.r_list)-1):  # -1 to account for value of r has not been added yet
+                    self.add_r(0)
+
+            z_list = [self.iterate(r, v)]  # First value adds r in case of terminal reward
+            for i in range(1, n_return):
                 z_list.append(self.iterate(0, 0))
             return z_list
 
@@ -262,7 +272,7 @@ class experience_replay_sender:
         self.K = experience_settings["K"]
         self.needed_delay = self.n + self.K
         self.gamma = gamma
-        self.bootstrap_returner = bootstrap_returner(self.n, self.gamma)
+        self.bootstrap_returner = bootstrap_returner(self.n, self.gamma, self.K)
         # A list for storing lists of inputs to send. Usually S_new, S, r, done
         self.S_storage = []
         self.a_storage = []
@@ -283,7 +293,7 @@ class experience_replay_sender:
         self.step = 0
 
     def reset(self):
-        self.bootstrap_returner = bootstrap_returner(self.n, self.gamma)
+        self.bootstrap_returner = bootstrap_returner(self.n, self.gamma, self.K)
         self.S_storage = []
         self.a_storage = []
         self.r_storage = []
@@ -296,19 +306,19 @@ class experience_replay_sender:
                              self.a_storage,
                              self.r_storage,
                              self.done_storage,
-                             self.pi_storage,
                              self.v_storage,
+                             self.pi_storage,
                              self.z_storage]
         self.seq_delay_cache = deque()
         self.step = 0
 
     def send(self, done):
-        if (len(self.list_storage[0]) == (self.seq_len+self.past_obs+self.K-2)) or done:
+        if (len(self.list_storage[0]) == (self.seq_len+self.past_obs+self.K - (self.past_obs>0) - (self.K>0))) or done:
             # Convert all sequences (lists) to array
             message = []
             new_list = []
 
-            n_ele = -(self.K+self.past_obs - 1 - (self.past_obs>1))
+            n_ele = -(self.K+self.past_obs - 1 - (self.past_obs > 1))
             for obs_type in self.list_storage:
                 message.append(np.stack(obs_type))
                 new_list.append(obs_type[n_ele:])  # Add last K points and past obs from last batch
@@ -326,21 +336,20 @@ class experience_replay_sender:
         self.step += 1
         obs_list = [S, a, r, done, v, pi]
         self.seq_delay_cache.append(obs_list)
-
         if self.step < self.n:
             # Add r before n-bootstrap can be calculated
             self.bootstrap_returner.add_r(r)
-        if self.step >= self.n or done:
+        if (self.step >= self.n) or done:
             # Case where bootstrap n-step can be calculated
             zs = self.bootstrap_returner.update(r, v, done)
 
-            if self.step == self.n or (done and self.step<self.n):
+            if self.step == self.n or (done and (self.step < self.n)):
                 # Add values to the beginning
                 self.pad_beginning(zs[0])
 
             # Loop is for the case when env is done and all remaining bootstrap can be calculated
             n_send = 0
-            for z in zs[0:len(self.seq_delay_cache)]:
+            for z in zs:
                 # Send remaining values
                 n_send += 1
                 delayed_sample = self.seq_delay_cache.popleft()
@@ -348,8 +357,8 @@ class experience_replay_sender:
                 # Store list
                 for j in range(len(delayed_sample)):
                     self.list_storage[j].append(delayed_sample[j])
-                terminal_obs = (n_send == self.n) and done  # The delay needs to be included in the terminal state
-                self.send(terminal_obs)  # This sends the information if there is enough
+
+                self.send(done and n_send==len(zs))  # This sends the information if there is enough
 
     def pad_beginning(self, z):
         start_sample = self.seq_delay_cache[0]
@@ -360,3 +369,20 @@ class experience_replay_sender:
         # The z value is added seperatly to avoid copying start_sample
         for j in range(self.past_obs-1):
             self.list_storage[-1].append(z)
+
+class frame_stacker:
+    def __init__(self, n_stack, boundry_type="copy"):
+        self.frames = deque(maxlen=n_stack)
+        self.n_stack = n_stack
+        self.boundry_type = boundry_type
+
+    def get_stack(self, F):
+        if len(self.frames) == 0:
+            # Case of initial observation
+            if self.boundry_type == "copy":
+                self.frames.extend([F]*self.n_stack)
+        # Add observation
+        self.frames.append(F)
+        # Stack frames to numpy array and send back
+        S = np.stack(self.frames)
+        return S

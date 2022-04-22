@@ -92,7 +92,8 @@ def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta):
     value_error = l_v(z, v)
     policy_error = l_p(pi, P)
     total_error = reward_error + value_error + policy_error
-    total_error = torch.mean((total_error/(P_imp[:,None] * N))**beta)  # Scale gradient with importance weighting
+    #total_error = torch.mean((total_error/(P_imp[:,None] * N))**beta)  # Scale gradient with importance weighting
+    total_error = torch.mean((total_error / N) ** beta)  # Scale gradient with importance weighting
     return total_error, reward_error.mean(), value_error.mean(), policy_error.mean()
 
 
@@ -101,6 +102,7 @@ class model_trainer:
         self.MCTS_settings = MCTS_settings
         self.criterion = muZero_games_loss
         self.ER = expereince_replay
+        self.experience_settings = experience_settings
         self.K = experience_settings["K"]
         self.num_epochs = training_settings["num_epochs"]
         self.BS = training_settings["train_batch_size"]
@@ -154,7 +156,7 @@ class model_trainer:
             P_batches = []
             # Optimize
             self.optimizer.zero_grad()
-            new_S2 = self.h_model.forward(S_batch)
+            new_S2 = self.h_model.forward(S_batch[:,-1]) # Only the most recent of the unrolled observations are used
             new_S = new_S2
             for k in range(self.K):
                 P_batch, v_batch = self.f_model.forward(new_S)
@@ -170,8 +172,8 @@ class model_trainer:
             v_batches = torch.stack(v_batches, dim=1).squeeze(dim=2)
             r_batches = torch.stack(r_batches, dim=1).squeeze(dim=2)
             self.ER.update_weightings(p_vals[0], batch_idx)
-            loss, r_loss, v_loss, P_loss = self.criterion(u_batch, r_batches.squeeze(dim=1),
-                                                          z_batch, v_batches.squeeze(dim=1),
+            loss, r_loss, v_loss, P_loss = self.criterion(u_batch, r_batches,
+                                                          z_batch, v_batches,
                                                           pi_batch, P_batches,
                                                           P_imp, self.ER.N, self.beta)
             for parms in self.f_model.parameters(): parms.retain_grad()
@@ -183,7 +185,28 @@ class model_trainer:
             self.scheduler.step()
 
             if self.training_counter % 10 == 1:
-                self.wr_Q.put(['dist', 'Output/v', v_batch.detach().cpu().numpy(), self.training_counter])
+                z_loss = 0
+                n_boot = self.experience_settings["n_bootstrap"]
+                gamma = self.MCTS_settings["gamma"]
+                for j in range(self.BS):
+                    done_mask = done_batch[j]
+                    done_mask[np.argmax(done_mask)] = 0  # Set the first encountered done value to be 0
+                    for k in range(self.K-n_boot):  # This is the interval done values can be reasoned
+                        # Prepare done tiling
+                        mask = torch.ones(n_boot)  # +1 to take bootstrap value into account
+                        mask[:(self.K-k)] = done_mask[k:(k + n_boot)]
+                        mask = torch.abs(1-mask)  # Invert mask
+                        v_vals = torch.arange(u_batch[j, k], u_batch[j, k]+n_boot)
+                        v_vals = v_vals * mask  # Remove done values
+                        v_vals = torch.sum(v_vals*(gamma**torch.arange(0, n_boot)))
+                        v_vals += mask[-1] * (S_batch[j, -1, 0, 0, 0] + k + n_boot-1) * gamma**n_boot
+                        z_loss = max(torch.abs(v_vals-z_batch[j, k]), z_loss)
+
+                self.wr_Q.put(['scalar', 'oracle/max_v_loss', z_loss.detach().cpu(),
+                               self.training_counter])
+
+                self.wr_Q.put(['scalar', 'oracle/r', torch.max(torch.abs(S_batch[:, -1, 0, 0, 0] - u_batch[:, 0])).detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'Output/v', v_batch.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Output/P', P_batch.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Output/r', r_batch.detach().cpu(), self.training_counter])
 
@@ -208,6 +231,7 @@ class model_trainer:
                     self.wr_Q.put(['scalar', 'mean_gradient/model_f/layer' + str(i), torch.abs(parms.grad).mean().detach().cpu(),
                                    self.training_counter])
                     i += 1
+                """
                 i = 0
                 for parms in list(self.g_model.parameters()):
                     self.wr_Q.put(
@@ -219,6 +243,7 @@ class model_trainer:
                         ['scalar', 'mean_gradient/model_g/layer' + str(i), torch.abs(parms.grad).mean().detach().cpu(),
                          self.training_counter])
                     i += 1
+                """
                 i = 0
                 for parms in list(self.h_model.parameters()):
                     self.wr_Q.put(

@@ -11,6 +11,8 @@ from functools import partial
 import torch
 import numpy as np
 import torch.nn.functional as F
+from resnet_model import ResNet
+from torchvision.models.resnet import BasicBlock
 
 
 if __name__ == '__main__':
@@ -18,22 +20,22 @@ if __name__ == '__main__':
                      "action_size": (4,),  # size of action space
                      "hidden_S_size": (3, 3),  # Size of the hidden state
                      "observation_size": (3,3),  # shape of observation space
-                     "gamma": 0.9}  # parameter for pUCT selection
+                     "gamma": 0.1}  # parameter for pUCT selection
 
     # Settings for experience replay and storing of values in general
     experience_settings = {"history_size": 50,  # The number of sequences of frames to store in memory
-                        "sequence_length": 1000,  # The number of frames in each sequence
-                        "n_bootstrap": 4,  # Number of steps forward to bootstrap from
-                        "past_obs": 1,
-                        "K": 5  # Number of steps to unroll during training. Needed here to determine delay of sending
+                        "sequence_length": 100,  # The number of frames in each sequence
+                        "n_bootstrap": 2,  # Number of steps forward to bootstrap from
+                        "past_obs": 6,
+                        "K": 4  # Number of steps to unroll during training. Needed here to determine delay of sending
                        }
     training_settings = {"train_batch_size": 32,  # Batch size on GPU during training
                          "num_epochs": 4*10**4,
                          "alpha": 1,
                          "beta": 1,
-                         "lr_init": 1.,  # Original Atari rate was 0.05
+                         "lr_init": 0.01,  # Original Atari rate was 0.05
                          "lr_decay_rate": 0.5, # Original Atari rate was 0.1
-                         "lr_decay_steps": 10000,  # Original Atari was 350e3
+                         "lr_decay_steps": 500,  # Original Atari was 350e3
                          "momentum": 0.9  # Original was 0.9
                          }
     Q_writer = Queue()
@@ -57,10 +59,10 @@ if __name__ == '__main__':
     # Add samples to experience replay
     for i in range(N_episodes):
         # Sample epiosde length
-        episode_len = np.random.randint(1, max_episode_len)
+        episode_len = N_episodes#np.random.randint(1, max_episode_len)
 
         S_stack = np.random.rand(episode_len, 1, obs_size[0], obs_size[1]).astype(np.float32)
-        S_stack[:, 0,  0, 0] = np.arange(episode_len)
+        S_stack[:, 0,  :, :] = np.arange(episode_len)[:,None, None]
         #for ii in range(obs_size[0]):
         #    for jj in range(obs_size[1]):
         #        S_stack[:, ii, jj] = np.arange(episode_len)
@@ -80,7 +82,7 @@ if __name__ == '__main__':
         total_samples += episode_len
 
 
-
+    """
     def resnet40(in_channels, filter_size=128, board_size=9, deepths=[19]):
         return ResNet(in_channels, filter_size, board_size, block=ResNetBasicBlock, deepths=deepths)
 
@@ -160,6 +162,102 @@ if __name__ == '__main__':
             value = self.layer2_2(value)
             return [policy, value]
 
+
+    class Net(nn.Module):
+        def __init__(self, output_shape):
+            super().__init__()
+            self.output_shape = output_shape
+            self.conv1 = nn.Conv2d(1, 16, 3, padding=1)
+            self.conv2 = nn.Conv2d(16, 32, 3, padding=1)
+            self.fc1 = nn.Linear(2*144, 128)
+            self.fc2 = nn.Linear(128, 64)
+            self.fc3 = nn.Linear(64, np.prod(self.output_shape))
+
+        def forward(self, x):
+            x = F.relu(self.conv1(x))
+            x = F.relu(self.conv2(x))
+            x = torch.flatten(x, 1)  # flatten all dimensions except batch
+            x = F.relu(self.fc1(x))
+            x = F.relu(self.fc2(x))
+            x = self.fc3(x)
+            x = x.reshape((x.shape[0],1) + self.output_shape)
+            return x
+
+    class TwoNet(nn.Module):
+        def __init__(self, input_channel, planes, policy_shape, policy_channels):
+            super().__init__()
+            self.policy_shape = policy_shape
+            self.policy_channels = policy_channels
+            self.conv1 = nn.Conv2d(input_channel, 16, 3, padding=1)
+            self.conv2 = nn.Conv2d(16, 32, 3, padding=1)
+            self.fc1 = nn.Linear(144*2, 128)
+            self.fc2 = nn.Linear(128, 64)
+            self.policyHead = nn.Linear(64,  np.prod(self.policy_shape)*self.policy_channels)
+            self.valueHead = nn.Linear(64, 1)
+
+        def forward(self, x):
+            x = F.relu(self.conv1(x))
+            x = F.relu(self.conv2(x))
+            x = torch.flatten(x, 1)  # flatten all dimensions except batch
+            x = F.relu(self.fc1(x))
+            x = F.relu(self.fc2(x))
+            policy = self.policyHead(x)
+            value = self.valueHead(x)
+            policy = policy.reshape((policy.shape[0], self.policy_channels) + self.policy_shape)
+            return policy, value
+    """
+
+
+    class h_resnet(nn.Module):
+        def __init__(self):
+            super().__init__()
+            _COMMON_META = {
+                "task": "image_classification",
+                "size": (3, 3),
+                "min_size": (64, 64),
+                "categories": 9,
+            }
+            self.resnet =  ResNet(BasicBlock, [2, 2, 2, 2], inplanes = 1, num_classes = 9)
+
+        def forward(self, x):
+            x = self.resnet(x)
+            x = x.reshape((x.shape[0], 1) + (3,3))
+            return x
+
+    class g_resnet(nn.Module):
+        def __init__(self):
+            super().__init__()
+            _COMMON_META = {
+                "task": "image_classification",
+                "size": (3, 3),
+                "min_size": (64, 64),
+                "categories": 9,
+            }
+            self.resnet =  ResNet(BasicBlock, [2, 2, 2, 2], inplanes = 5, num_classes = 1+9)
+
+        def forward(self, x):
+            x = self.resnet(x)
+            [value, policy] = torch.split(x, [1, 9], dim=1)
+            policy = policy.reshape((policy.shape[0], 1) + (3,3))
+            return policy, value
+
+    class f_resnet(nn.Module):
+        def __init__(self):
+            super().__init__()
+            _COMMON_META = {
+                "task": "image_classification",
+                "size": (3, 3),
+                "min_size": (64, 64),
+                "categories": 9,
+            }
+            self.resnet =  ResNet(BasicBlock, [2, 2, 2, 2], inplanes = 1, num_classes = 1+4)
+
+        def forward(self, x):
+            x = self.resnet(x)
+            [value, policy] = torch.split(x, [1, 4], dim=1)
+            policy = policy.reshape((policy.shape[0],) + MCTS_settings["action_size"])
+            return policy, value
+
     hidden_shape = (3,3)
     """
     import hiddenlayer as hl
@@ -180,11 +278,12 @@ if __name__ == '__main__':
     lr_list = torch.linspace(0, -3, 5)
     lr_list = 10**lr_list
 
+
     min_vals = []
     for lr in lr_list:
-        f_model = dummy_networkF(hidden_shape, action_size, 64)
-        g_model = dummy_networkG((5,)+hidden_shape, (1,)+hidden_shape, 64)
-        h_model = dummy_networkH((past_obs,) + obs_size, hidden_shape, 64)
+        f_model = f_resnet() #dummy_networkF(hidden_shape, action_size, 4)
+        g_model = g_resnet()#TwoNet(5, 32, hidden_shape, 1)  # dummy_networkG((5,)+hidden_shape, (1,)+hidden_shape, 64)
+        h_model = h_resnet()
         trainer = model_trainer(f_model, g_model, h_model, EX_server, experience_settings, training_settings, MCTS_settings)
         trainer.train()
 

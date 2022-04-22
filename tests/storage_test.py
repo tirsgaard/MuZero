@@ -1,41 +1,41 @@
 import numpy as np
 from multiprocessing import Queue
-from storage_functions import experience_replay_sender, experience_replay_server
+from storage_functions import experience_replay_sender, experience_replay_server, frame_stacker
+from collections import deque
 import time
 
 MCTS_settings = {"n_parallel_explorations": 4,  # Number of pseudo-parrallel runs of the MCTS, note >16 reduces accuracy significantly
                  "action_size": (4,),  # size of action space
                  "observation_size": (3,3),  # shape of observation space
-                 "gamma" : 0.9}  # parameter for pUCT selection
+                 "gamma" : 0.1}  # parameter for pUCT selection
 
 # Settings for experience replay and storing of values in general
 experience_settings = {"history_size": 50,  # The number of sequences of frames to store in memory
                     "sequence_length": 10,  # The number of frames in each sequence
                     "n_bootstrap": 4,  # Number of steps forward to bootstrap from
                     "past_obs": 6,  # Number of past observations to stack. Original Atari was 32
-                    "K": 5  # Number of steps to unroll during training. Needed here to determine delay of sending
+                    "K": 2  # Number of steps to unroll during training. Needed here to determine delay of sending
                    }
 n_bootstrap = experience_settings["n_bootstrap"]
 gamma = MCTS_settings["gamma"]
 past_obs = experience_settings["past_obs"]
 
-EX_server = experience_replay_server(experience_settings, MCTS_settings)
-get_ex_Q = EX_server.get_Q()
-EX_sender1 = experience_replay_sender(get_ex_Q, 1, gamma, experience_settings)
-EX_sender2 = experience_replay_sender(get_ex_Q, 2, gamma, experience_settings)
+ex_Q = Queue()
+EX_server = experience_replay_server(ex_Q, experience_settings, MCTS_settings)
+EX_sender1 = experience_replay_sender(ex_Q, 1, gamma, experience_settings)
+EX_sender2 = experience_replay_sender(ex_Q, 2, gamma, experience_settings)
 np.random.seed(19)
 N_rounds = 1000
-S_stack1 = np.random.rand(N_rounds, 3,3)
-S_stack1[:,0,0] = np.arange(N_rounds)
-a_stack1 = np.random.rand(N_rounds,4)
+S_stack1 = np.random.rand(N_rounds, 1, 3,3)
+S_stack1[:,0, 0,0] = np.arange(N_rounds)
+a_stack1 = np.random.randint(0, np.prod(MCTS_settings["action_size"])+1, N_rounds)
 r_stack1 = np.arange(N_rounds)
-v_stack1 = 2*np.arange(N_rounds)
+v_stack1 = np.arange(N_rounds)
 done_stack1 = np.zeros((N_rounds))
 pi_stack1 = np.random.rand(N_rounds,4)
 def calc_n_bootstrap(index, n_bootstrap):
-    gammas = sum(gamma ** np.arange(n_bootstrap) * r_stack1[index:(n_bootstrap+index)])
-    z = sum(gamma ** np.arange(n_bootstrap) * r_stack1[index:(n_bootstrap+index)]) + v_stack1[index+n_bootstrap - 1] * gamma ** (
-        n_bootstrap)
+    r_s = sum(gamma ** np.arange(n_bootstrap) * r_stack1[index:(n_bootstrap+index)])
+    z = r_s + v_stack1[index+n_bootstrap-1] * gamma ** n_bootstrap
     return z
 z_stack1 = []
 for i in range(N_rounds-4):
@@ -55,7 +55,7 @@ for i in range(N_rounds):
     EX_sender1.store(S_stack1[i], a_stack1[i], r_stack1[i], done_stack1[i], v_stack1[i], pi_stack1[i])
 EX_server.recv_store()
 gamma = MCTS_settings["gamma"]
-
+print("Passed sending more data than buffer lenght")
 
 # Do checks
 seq_len = experience_settings["sequence_length"]
@@ -68,7 +68,7 @@ for i_stacks in range(N_rounds // (hist_len*seq_len)):
         # Check P-values are updated
         start_index = i_stacks*hist_len*seq_len+i*seq_len
         end_index = i_stacks*hist_len*seq_len+(i+1)*seq_len + K + past_obs - 2
-        assert(np.all(EX_server.P[start_index:(end_index-K+1)]!=0))
+        assert(np.all(EX_server.P[start_index:(end_index-K+1)] != 0))
         # Check all values
         assert(np.all(EX_server.storage[i][0] == S_unrolled[start_index:end_index]))
         assert(np.all(EX_server.storage[i][1] == a_unrolled[start_index:end_index]))
@@ -79,16 +79,16 @@ for i_stacks in range(N_rounds // (hist_len*seq_len)):
         assert (np.all(EX_server.storage[i][6] == z_unrolled[start_index:end_index]))
         # Check if sampling works
         EX_server.return_batches(i+1, 1, K)
-
+print("Passed correct values for full stack")
 # Check for correct behavior for batches done
-EX_server = experience_replay_server(experience_settings, MCTS_settings)
-get_ex_Q = EX_server.get_Q()
-EX_sender = experience_replay_sender(get_ex_Q, 1, gamma, experience_settings)
+ex_Q = Queue()
+EX_server = experience_replay_server(ex_Q, experience_settings, MCTS_settings)
+EX_sender = experience_replay_sender(ex_Q, 1, gamma, experience_settings)
 np.random.seed(1)
 cut_len = seq_len-3
-S_stack1 = np.random.rand(cut_len, 3,3)
-S_stack1[:,0,0] = np.arange(cut_len)
-a_stack1 = np.random.rand(cut_len,4)
+S_stack1 = np.random.rand(cut_len, 1, 3,3)
+S_stack1[:, 0, 0, 0] = np.arange(cut_len)
+a_stack1 = np.random.randint(0, np.prod(MCTS_settings["action_size"])+1, N_rounds)
 r_stack1 = np.arange(cut_len)
 v_stack1 = 2*np.arange(cut_len)
 done_stack1 = np.zeros((cut_len))
@@ -98,13 +98,14 @@ for i in range(cut_len):
     EX_sender.store(S_stack1[i], a_stack1[i], r_stack1[i], done_stack1[i], v_stack1[i], pi_stack1[i])
 EX_server.recv_store()
 result = EX_server.return_batches(4, 1, K)
+print("Passed no error for done stacks")
 
 cut_len = seq_len-2
-S_stack1 = np.random.rand(cut_len, 3,3)
-S_stack1[:,0,0] = np.arange(cut_len)
-a_stack1 = np.random.rand(cut_len,4)
+S_stack1 = np.random.rand(cut_len, 1, 3, 3)
+S_stack1[:,0,0,0] = np.arange(cut_len)
+a_stack1 = np.random.randint(0, np.prod(MCTS_settings["action_size"])+1, N_rounds)
 r_stack1 = np.arange(cut_len)
-v_stack1 = 2*np.arange(cut_len)
+v_stack1 = np.arange(cut_len)
 done_stack1 = np.zeros((cut_len))
 done_stack1[-1] = 1
 pi_stack1 = np.random.rand(cut_len,4)
@@ -117,36 +118,36 @@ for i in range(N_rounds):
     result = EX_server.return_batches(batch_size, 1, K)
     alpha = np.random.rand()
     result = EX_server.return_batches(batch_size, alpha, K)
-
+print("Passed returning some batches")
 N_episodes = 100
 max_episode_len = 1000
-total_samples = 0
 
-EX_server = experience_replay_server(experience_settings, MCTS_settings)
-get_ex_Q = EX_server.get_Q()
-EX_sender = experience_replay_sender(get_ex_Q, 1, gamma, experience_settings)
-EX_sender2 = experience_replay_sender(get_ex_Q, 2, gamma, experience_settings)
+ex_Q = Queue()
+EX_server = experience_replay_server(ex_Q, experience_settings, MCTS_settings)
+EX_sender = experience_replay_sender(ex_Q, 1, gamma, experience_settings)
+EX_sender2 = experience_replay_sender(ex_Q, 2, gamma, experience_settings)
 
 def check_batch(result, batch_size):
     # Check if S and r agree
-    assert(result[0].shape[0]==batch_size)
+    assert(result[0].shape[0] == batch_size)
     assert (result[1].shape[0] == batch_size)
     assert (result[2].shape[0] == batch_size)
     assert (result[3].shape[0] == batch_size)
     assert (result[4].shape[0] == batch_size)
     assert (result[5].shape[0] == batch_size)
-    assert(np.any(result[0][:,-1, 0, 0] == result[2][:,0]))
+    assert(np.any(result[0][:,-1,-1,0,0] == result[2][:,0]))
 
+total_samples = 0
 time_start = time.time()
 for i in range(N_episodes):
     # Sample epiosde length
     episode_len = np.random.randint(1,max_episode_len)
 
-    S_stack = np.random.rand(episode_len, 3, 3)
-    S_stack[:, 0, 0] = np.arange(episode_len)
-    a_stack = np.random.rand(episode_len, 4)
+    S_stack = np.random.rand(episode_len, 1, 3, 3)
+    S_stack[:, 0, 0, 0] = np.arange(episode_len)
+    a_stack = np.random.randint(0, np.prod(MCTS_settings["action_size"])+1, N_rounds)
     r_stack = np.arange(episode_len)
-    v_stack = 2 * np.arange(episode_len)
+    v_stack = np.arange(episode_len)
     done_stack = np.zeros((episode_len))
     done_stack[episode_len-1] = 1
     pi_stack = np.random.rand(episode_len, 4)
@@ -158,7 +159,7 @@ for i in range(N_episodes):
             result = EX_server.return_batches(batch_size, 1, K)
             check_batch(result, batch_size)
         EX_sender2.store(S_stack[j], a_stack[j], r_stack[j], done_stack[j], v_stack[j], pi_stack[j])
-        if not get_ex_Q.empty():
+        if not ex_Q.empty():
             EX_server.recv_store()
 
 

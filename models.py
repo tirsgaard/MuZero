@@ -99,3 +99,12 @@ class dummy_networkF(nn.Module):
         value = self.layer2_2(value)
         value = value
         return [policy, value]
+
+def h_scale(x, epsilon = 0.01):
+    y = torch.sign(x)*(torch.sqrt(torch.abs(x)+1)-1)+epsilon*x
+    return y
+
+def h_inverse_scale(y, epsilon = 0.01):
+    intermid = (torch.sqrt(1+4*epsilon*(torch.abs(y)+1+epsilon))-1)/(2*epsilon)
+    x = torch.sign(y)*(intermid*intermid-1)
+    return x

@@ -3,7 +3,7 @@ from collections import deque, Counter, defaultdict
 from torch.multiprocessing import Process, Queue, Pipe, Value, Lock, Manager, Pool
 import time
 import queue
-from storage_functions import experience_replay_sender
+from storage_functions import experience_replay_sender, frame_stacker
 from MCTS import MCTS, generate_root, map_tree, verify_nodes
 from tqdm import tqdm
 import matplotlib.pyplot as plt
@@ -274,22 +274,6 @@ def sim_games(env_maker, f_model, g_model, h_model, EX_Q, MCTS_settings, MuZero_
         p.terminate()
 
 
-class frame_stacker:
-    def __init__(self, n_stack, boundry_type="copy"):
-        self.frames = deque(maxlen=n_stack)
-        self.n_stack = n_stack
-        self.boundry_type = boundry_type
-
-    def get_stack(self, F):
-        if len(self.frames) == 0:
-            # Case of initial observation
-            if self.boundry_type == "copy":
-                self.frames.extend([F]*self.n_stack)
-        # Add observation
-        self.frames.append(F)
-        # Stack frames to numpy array and send back
-        S = np.stack(self.frames)
-        return S
 
 
 
