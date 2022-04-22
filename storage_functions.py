@@ -251,13 +251,18 @@ class bootstrap_returner:
             # Case where environment is done and all values needs to be calculated
             if len(self.r_list)<(self.n-1):  # -1 to account for value of r has not been added yet
                 # Case where early termination of environment happened, and list was not filled up
+                self.add_r(r)
                 n_return = len(self.r_list)  # A value for each case in r_list needs to be added
                 for i in range(self.n-len(self.r_list)-1):  # -1 to account for value of r has not been added yet
                     self.add_r(0)
 
-            z_list = [self.iterate(r, v)]  # First value adds r in case of terminal reward
-            for i in range(1, n_return):
-                z_list.append(self.iterate(0, 0))
+                z_list = []  # First value adds r in case of terminal reward
+                for i in range(0, n_return):
+                    z_list.append(self.iterate(0, 0))
+            else:
+                z_list = [self.iterate(r, v)]  # First value adds r in case of terminal reward
+                for i in range(1, n_return):
+                    z_list.append(self.iterate(0, 0))
             return z_list
 
 
@@ -336,9 +341,6 @@ class experience_replay_sender:
         self.step += 1
         obs_list = [S, a, r, done, v, pi]
         self.seq_delay_cache.append(obs_list)
-        if self.step < self.n:
-            # Add r before n-bootstrap can be calculated
-            self.bootstrap_returner.add_r(r)
         if (self.step >= self.n) or done:
             # Case where bootstrap n-step can be calculated
             zs = self.bootstrap_returner.update(r, v, done)
@@ -359,6 +361,9 @@ class experience_replay_sender:
                     self.list_storage[j].append(delayed_sample[j])
 
                 self.send(done and n_send==len(zs))  # This sends the information if there is enough
+        elif self.step < self.n:
+            # Add r before n-bootstrap can be calculated
+            self.bootstrap_returner.add_r(r)
 
     def pad_beginning(self, z):
         start_sample = self.seq_delay_cache[0]

@@ -185,6 +185,7 @@ class model_trainer:
             self.scheduler.step()
 
             if self.training_counter % 10 == 1:
+
                 z_loss = 0
                 n_boot = self.experience_settings["n_bootstrap"]
                 gamma = self.MCTS_settings["gamma"]
@@ -206,6 +207,7 @@ class model_trainer:
                                self.training_counter])
 
                 self.wr_Q.put(['scalar', 'oracle/r', torch.max(torch.abs(S_batch[:, -1, 0, 0, 0] - u_batch[:, 0])).detach().cpu(), self.training_counter])
+
                 self.wr_Q.put(['dist', 'Output/v', v_batch.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Output/P', P_batch.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Output/r', r_batch.detach().cpu(), self.training_counter])

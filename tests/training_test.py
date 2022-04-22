@@ -59,7 +59,7 @@ if __name__ == '__main__':
     # Add samples to experience replay
     for i in range(N_episodes):
         # Sample epiosde length
-        episode_len = N_episodes#np.random.randint(1, max_episode_len)
+        episode_len = np.random.randint(1, max_episode_len)
 
         S_stack = np.random.rand(episode_len, 1, obs_size[0], obs_size[1]).astype(np.float32)
         S_stack[:, 0,  :, :] = np.arange(episode_len)[:,None, None]
