@@ -25,9 +25,9 @@ if __name__ == '__main__':
     # Settings for experience replay and storing of values in general
     experience_settings = {"history_size": 50,  # The number of sequences of frames to store in memory
                         "sequence_length": 100,  # The number of frames in each sequence
-                        "n_bootstrap": 2,  # Number of steps forward to bootstrap from
+                        "n_bootstrap": 1,  # Number of steps forward to bootstrap from
                         "past_obs": 6,
-                        "K": 4  # Number of steps to unroll during training. Needed here to determine delay of sending
+                        "K": 1  # Number of steps to unroll during training. Needed here to determine delay of sending
                        }
     training_settings = {"train_batch_size": 32,  # Batch size on GPU during training
                          "num_epochs": 4*10**4,
@@ -59,7 +59,7 @@ if __name__ == '__main__':
     # Add samples to experience replay
     for i in range(N_episodes):
         # Sample epiosde length
-        episode_len = np.random.randint(1, max_episode_len)
+        episode_len = 40 #np.random.randint(1, max_episode_len)
 
         S_stack = np.random.rand(episode_len, 1, obs_size[0], obs_size[1]).astype(np.float32)
         S_stack[:, 0,  :, :] = np.arange(episode_len)[:,None, None]
@@ -68,8 +68,8 @@ if __name__ == '__main__':
         #        S_stack[:, ii, jj] = np.arange(episode_len)
 
         a_stack = np.zeros((episode_len))
-        r_stack = np.arange(episode_len)  # np.ones((episode_len,))#
-        v_stack = np.arange(episode_len)
+        r_stack = np.arange(episode_len, dtype=np.float64)  # np.ones((episode_len,))#
+        v_stack = np.arange(episode_len, dtype=np.float64)
         done_stack = np.zeros((episode_len,))
         done_stack[episode_len-1] = 1
         pi_stack = np.zeros((episode_len, action_size[0]))

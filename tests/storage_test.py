@@ -119,7 +119,7 @@ for i in range(N_rounds):
     alpha = np.random.rand()
     result = EX_server.return_batches(batch_size, alpha, K)
 print("Passed returning some batches")
-N_episodes = 100
+N_episodes = 10000
 max_episode_len = 1000
 
 ex_Q = Queue()
@@ -161,6 +161,9 @@ for i in range(N_episodes):
         EX_sender2.store(S_stack[j], a_stack[j], r_stack[j], done_stack[j], v_stack[j], pi_stack[j])
         if not ex_Q.empty():
             EX_server.recv_store()
+    if i % 200 == 0:
+        print(i)
+
 
 
     total_samples += episode_len

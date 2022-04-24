@@ -93,7 +93,7 @@ def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta):
     policy_error = l_p(pi, P)
     total_error = reward_error + value_error + policy_error
     #total_error = torch.mean((total_error/(P_imp[:,None] * N))**beta)  # Scale gradient with importance weighting
-    total_error = torch.mean((total_error / N) ** beta)  # Scale gradient with importance weighting
+    total_error = torch.mean((total_error / N) ** beta)  # Scale gradient without importance weighting
     return total_error, reward_error.mean(), value_error.mean(), policy_error.mean()
 
 
@@ -172,10 +172,12 @@ class model_trainer:
             v_batches = torch.stack(v_batches, dim=1).squeeze(dim=2)
             r_batches = torch.stack(r_batches, dim=1).squeeze(dim=2)
             self.ER.update_weightings(p_vals[0], batch_idx)
+
             loss, r_loss, v_loss, P_loss = self.criterion(u_batch, r_batches,
                                                           z_batch, v_batches,
                                                           pi_batch, P_batches,
                                                           P_imp, self.ER.N, self.beta)
+
             for parms in self.f_model.parameters(): parms.retain_grad()
             for parms in self.g_model.parameters(): parms.retain_grad()
             for parms in self.h_model.parameters(): parms.retain_grad()
@@ -221,7 +223,7 @@ class model_trainer:
                 self.wr_Q.put(['scalar', 'Value_loss/train', v_loss.mean().detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Policy_loss/train', P_loss.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['scalar', 'learning_rate', self.scheduler.get_last_lr()[0], self.training_counter])
-
+            """"""
             if self.training_counter % 100 == 0:
                 # Weights
                 i = 0
@@ -257,7 +259,7 @@ class model_trainer:
                         ['scalar', 'mean_gradient/model_h/layer' + str(i), torch.abs(parms.grad).mean().detach().cpu(),
                          self.training_counter])
                     i += 1
-                """
+
                 # Gradients
                 self.wr_Q.put(['scalar', 'gradient/model_f/layer0', list(self.f_model.parameters())[0].grad.mean().detach().cpu(), self.training_counter])
                 self.wr_Q.put(['scalar', 'gradient/model_f/layer6', list(self.f_model.parameters())[6].grad.mean().detach().cpu(), self.training_counter])
@@ -274,7 +276,7 @@ class model_trainer:
                 self.wr_Q.put(['scalar', 'gradient/model_g/layer3', list(self.g_model.parameters())[3].grad.mean().detach().cpu(), self.training_counter])
                 self.wr_Q.put(['scalar', 'gradient/model_g/layer9', list(self.g_model.parameters())[9].grad.mean().detach().cpu(), self.training_counter])
                 self.wr_Q.put(['scalar', 'gradient/model_g/layer18', list(self.g_model.parameters())[18].grad.mean().detach().cpu(), self.training_counter])
-                """
+
 
             self.training_counter += 1
 
