@@ -33,7 +33,7 @@ if __name__ == '__main__':
                          "num_epochs": 4*10**4,
                          "alpha": 1,
                          "beta": 1,
-                         "lr_init": 0.01,  # Original Atari rate was 0.05
+                         "lr_init": 0.003,  # Original Atari rate was 0.05
                          "lr_decay_rate": 0.5, # Original Atari rate was 0.1
                          "lr_decay_steps": 500,  # Original Atari was 350e3
                          "momentum": 0.9  # Original was 0.9
@@ -53,13 +53,13 @@ if __name__ == '__main__':
     EX_server = experience_replay_server(ex_Q, experience_settings, MCTS_settings)
     EX_sender = experience_replay_sender(ex_Q, 1, gamma, experience_settings)
     np.random.seed(1)
-    N_episodes = 50
+    N_episodes = 1
     max_episode_len = 100
     total_samples = 0
     # Add samples to experience replay
     for i in range(N_episodes):
         # Sample epiosde length
-        episode_len = 40 #np.random.randint(1, max_episode_len)
+        episode_len = 34 #np.random.randint(1, max_episode_len)
 
         S_stack = np.random.rand(episode_len, 1, obs_size[0], obs_size[1]).astype(np.float32)
         S_stack[:, 0,  :, :] = np.arange(episode_len)[:,None, None]
@@ -71,7 +71,7 @@ if __name__ == '__main__':
         r_stack = np.arange(episode_len, dtype=np.float64)  # np.ones((episode_len,))#
         v_stack = np.arange(episode_len, dtype=np.float64)
         done_stack = np.zeros((episode_len,))
-        done_stack[episode_len-1] = 1
+        done_stack[-1] = 1
         pi_stack = np.zeros((episode_len, action_size[0]))
         pi_stack[:, 0] = 1
 
@@ -80,7 +80,10 @@ if __name__ == '__main__':
             while not ex_Q.empty():
                 EX_server.recv_store()
         total_samples += episode_len
-
+    # Catch last values bevause of delay of Queue.empty()
+    time.sleep(0.1)
+    while not ex_Q.empty():
+        EX_server.recv_store()
 
     """
     def resnet40(in_channels, filter_size=128, board_size=9, deepths=[19]):

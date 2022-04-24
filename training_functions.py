@@ -186,8 +186,8 @@ class model_trainer:
             self.optimizer.step()
             self.scheduler.step()
 
-            if self.training_counter % 10 == 1:
-
+            if self.training_counter % 100 == 1:
+                """
                 z_loss = 0
                 n_boot = self.experience_settings["n_bootstrap"]
                 gamma = self.MCTS_settings["gamma"]
@@ -209,7 +209,7 @@ class model_trainer:
                                self.training_counter])
 
                 self.wr_Q.put(['scalar', 'oracle/r', torch.max(torch.abs(S_batch[:, -1, 0, 0, 0] - u_batch[:, 0])).detach().cpu(), self.training_counter])
-
+                """
                 self.wr_Q.put(['dist', 'Output/v', v_batch.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Output/P', P_batch.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Output/r', r_batch.detach().cpu(), self.training_counter])
@@ -223,7 +223,7 @@ class model_trainer:
                 self.wr_Q.put(['scalar', 'Value_loss/train', v_loss.mean().detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Policy_loss/train', P_loss.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['scalar', 'learning_rate', self.scheduler.get_last_lr()[0], self.training_counter])
-            """"""
+
             if self.training_counter % 100 == 0:
                 # Weights
                 i = 0
@@ -235,7 +235,7 @@ class model_trainer:
                     self.wr_Q.put(['scalar', 'mean_gradient/model_f/layer' + str(i), torch.abs(parms.grad).mean().detach().cpu(),
                                    self.training_counter])
                     i += 1
-                """
+
                 i = 0
                 for parms in list(self.g_model.parameters()):
                     self.wr_Q.put(
@@ -247,7 +247,7 @@ class model_trainer:
                         ['scalar', 'mean_gradient/model_g/layer' + str(i), torch.abs(parms.grad).mean().detach().cpu(),
                          self.training_counter])
                     i += 1
-                """
+
                 i = 0
                 for parms in list(self.h_model.parameters()):
                     self.wr_Q.put(
@@ -259,23 +259,6 @@ class model_trainer:
                         ['scalar', 'mean_gradient/model_h/layer' + str(i), torch.abs(parms.grad).mean().detach().cpu(),
                          self.training_counter])
                     i += 1
-
-                # Gradients
-                self.wr_Q.put(['scalar', 'gradient/model_f/layer0', list(self.f_model.parameters())[0].grad.mean().detach().cpu(), self.training_counter])
-                self.wr_Q.put(['scalar', 'gradient/model_f/layer6', list(self.f_model.parameters())[6].grad.mean().detach().cpu(), self.training_counter])
-                self.wr_Q.put(['scalar', 'gradient/model_f/layer17', list(self.f_model.parameters())[17].grad.mean().detach().cpu(), self.training_counter])
-                self.wr_Q.put(['scalar', 'gradient/model_f/layer18', list(self.f_model.parameters())[18].grad.mean().detach().cpu(), self.training_counter])
-                self.wr_Q.put(['scalar', 'gradient/model_f/layer22', list(self.f_model.parameters())[22].grad.mean().detach().cpu(), self.training_counter])
-
-                self.wr_Q.put(['scalar', 'gradient/model_h/layer0', list(self.h_model.parameters())[0].grad.mean().detach().cpu(), self.training_counter])
-                self.wr_Q.put(['scalar', 'gradient/model_h/layer3', list(self.h_model.parameters())[3].grad.mean().detach().cpu(), self.training_counter])
-                self.wr_Q.put(['scalar', 'gradient/model_h/layer9', list(self.h_model.parameters())[9].grad.mean().detach().cpu(), self.training_counter])
-                self.wr_Q.put(['scalar', 'gradient/model_h/layer18', list(self.h_model.parameters())[18].grad.mean().detach().cpu(), self.training_counter])
-
-                self.wr_Q.put(['scalar', 'gradient/model_g/layer0', list(self.g_model.parameters())[0].grad.mean().detach().cpu(), self.training_counter])
-                self.wr_Q.put(['scalar', 'gradient/model_g/layer3', list(self.g_model.parameters())[3].grad.mean().detach().cpu(), self.training_counter])
-                self.wr_Q.put(['scalar', 'gradient/model_g/layer9', list(self.g_model.parameters())[9].grad.mean().detach().cpu(), self.training_counter])
-                self.wr_Q.put(['scalar', 'gradient/model_g/layer18', list(self.g_model.parameters())[18].grad.mean().detach().cpu(), self.training_counter])
 
 
             self.training_counter += 1
