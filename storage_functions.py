@@ -80,16 +80,26 @@ class experience_replay_server:
         self.P_replace_idx = (self.P_replace_idx + 1) % self.hist_size  # sequence to next replace
         self.total_store += val_len # Update number of stored total
 
-    def return_batches(self, batch_size, alpha, K):
-        # Normalize priority dist
-        if alpha != 1:
+    def return_batches(self, batch_size, alpha, K, uniform_sampling=False):
+        # Return batch_size samples sampled via prioritized sampling with parameter alpha.
+        # K is the number of unrolling steps. Priorizied sampling can be converted to uniform sampling
+        # But NOTE samples with error = 0 will still not be sampled
+        if uniform_sampling:
             non_zero = self.P != 0
-            P_temp2 = self.P[non_zero] ** -alpha
+            P_temp2 = self.P[non_zero] > 0
             P_temp2 = P_temp2 / np.sum(P_temp2)
             P_temp = self.P.copy()
             P_temp[non_zero] = P_temp2
         else:
-            P_temp = self.P / np.sum(self.P)
+            # Normalize priority dist
+            if alpha != 1:
+                non_zero = self.P != 0
+                P_temp2 = self.P[non_zero] ** -alpha
+                P_temp2 = P_temp2 / np.sum(P_temp2)
+                P_temp = self.P.copy()
+                P_temp[non_zero] = P_temp2
+            else:
+                P_temp = self.P / np.sum(self.P)
 
         # Select index of batches
         batch_idx = np.random.choice(self.hist_size * self.seq_size, size=batch_size, p=P_temp, replace=False)  # Very slow

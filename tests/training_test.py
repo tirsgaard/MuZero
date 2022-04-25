@@ -29,11 +29,11 @@ if __name__ == '__main__':
                         "past_obs": 6,
                         "K": 1  # Number of steps to unroll during training. Needed here to determine delay of sending
                        }
-    training_settings = {"train_batch_size": 32,  # Batch size on GPU during training
+    training_settings = {"train_batch_size": 8,  # Batch size on GPU during training
                          "num_epochs": 4*10**4,
                          "alpha": 1,
                          "beta": 1,
-                         "lr_init": 0.003,  # Original Atari rate was 0.05
+                         "lr_init": 0.001,  # Original Atari rate was 0.05
                          "lr_decay_rate": 0.5, # Original Atari rate was 0.1
                          "lr_decay_steps": 500,  # Original Atari was 350e3
                          "momentum": 0.9  # Original was 0.9
@@ -59,7 +59,7 @@ if __name__ == '__main__':
     # Add samples to experience replay
     for i in range(N_episodes):
         # Sample epiosde length
-        episode_len = 34 #np.random.randint(1, max_episode_len)
+        episode_len = 10 #np.random.randint(1, max_episode_len)
 
         S_stack = np.random.rand(episode_len, 1, obs_size[0], obs_size[1]).astype(np.float32)
         S_stack[:, 0,  :, :] = np.arange(episode_len)[:,None, None]
@@ -220,7 +220,7 @@ if __name__ == '__main__':
                 "min_size": (64, 64),
                 "categories": 9,
             }
-            self.resnet =  ResNet(BasicBlock, [2, 2, 2, 2], inplanes = 1, num_classes = 9)
+            self.resnet =  ResNet(BasicBlock, [3, 3, 3, 3], inplanes = 1, num_classes = 9)
 
         def forward(self, x):
             x = self.resnet(x)
@@ -236,7 +236,7 @@ if __name__ == '__main__':
                 "min_size": (64, 64),
                 "categories": 9,
             }
-            self.resnet =  ResNet(BasicBlock, [2, 2, 2, 2], inplanes = 5, num_classes = 1+9)
+            self.resnet =  ResNet(BasicBlock, [3, 3, 3, 3], inplanes = 5, num_classes = 1+9)
 
         def forward(self, x):
             x = self.resnet(x)
@@ -253,7 +253,7 @@ if __name__ == '__main__':
                 "min_size": (64, 64),
                 "categories": 9,
             }
-            self.resnet =  ResNet(BasicBlock, [2, 2, 2, 2], inplanes = 1, num_classes = 1+4)
+            self.resnet =  ResNet(BasicBlock, [3, 3, 3, 3], inplanes = 1, num_classes = 1+4)
 
         def forward(self, x):
             x = self.resnet(x)

@@ -148,7 +148,8 @@ class model_trainer:
             # Generate batch. Note we uniform sample instead of epoch as in the original paper
             S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, batch_idx, P_imp = self.ER.return_batches(self.BS,
                                                                                                             self.alpha,
-                                                                                                            self.K)
+                                                                                                            self.K,
+                                                                                                            uniform_sampling=True)
             S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp = self.convert_torch([S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp])
             p_vals = []  # Number
             r_batches = []
@@ -156,8 +157,7 @@ class model_trainer:
             P_batches = []
             # Optimize
             self.optimizer.zero_grad()
-            new_S2 = self.h_model.forward(S_batch[:,-1]) # Only the most recent of the unrolled observations are used
-            new_S = new_S2
+            new_S = self.h_model.forward(S_batch[:,-1]) # Only the most recent of the unrolled observations are used
             for k in range(self.K):
                 P_batch, v_batch = self.f_model.forward(new_S)
                 Sa_batch = stack_a_torch(new_S, a_batch[:, k], self.hidden_S_size, self.action_size)
@@ -171,20 +171,20 @@ class model_trainer:
             P_batches = torch.stack(P_batches, dim=1)
             v_batches = torch.stack(v_batches, dim=1).squeeze(dim=2)
             r_batches = torch.stack(r_batches, dim=1).squeeze(dim=2)
-            self.ER.update_weightings(p_vals[0], batch_idx)
-
             loss, r_loss, v_loss, P_loss = self.criterion(u_batch, r_batches,
                                                           z_batch, v_batches,
                                                           pi_batch, P_batches,
                                                           P_imp, self.ER.N, self.beta)
 
-            for parms in self.f_model.parameters(): parms.retain_grad()
-            for parms in self.g_model.parameters(): parms.retain_grad()
-            for parms in self.h_model.parameters(): parms.retain_grad()
+            #for parms in self.f_model.parameters(): parms.retain_grad()
+            #for parms in self.g_model.parameters(): parms.retain_grad()
+            #for parms in self.h_model.parameters(): parms.retain_grad()
 
             loss.backward()
             self.optimizer.step()
             self.scheduler.step()
+
+            #self.ER.update_weightings(p_vals[0], batch_idx)
 
             if self.training_counter % 100 == 1:
                 """
@@ -223,7 +223,7 @@ class model_trainer:
                 self.wr_Q.put(['scalar', 'Value_loss/train', v_loss.mean().detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Policy_loss/train', P_loss.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['scalar', 'learning_rate', self.scheduler.get_last_lr()[0], self.training_counter])
-
+            """
             if self.training_counter % 100 == 0:
                 # Weights
                 i = 0
@@ -259,7 +259,7 @@ class model_trainer:
                         ['scalar', 'mean_gradient/model_h/layer' + str(i), torch.abs(parms.grad).mean().detach().cpu(),
                          self.training_counter])
                     i += 1
-
+            """
 
             self.training_counter += 1
 
