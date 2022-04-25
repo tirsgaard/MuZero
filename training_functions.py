@@ -286,6 +286,7 @@ def writer_worker(wr_Q):
             elif type == 'dist':
                 writer.add_histogram(name, value, index)
             else:
+                print("Writer error")
                 raise TypeError
 
         time.sleep(1)

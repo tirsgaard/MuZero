@@ -35,7 +35,7 @@ if __name__ == '__main__':
                          "beta": 1,
                          "lr_init": 0.001,  # Original Atari rate was 0.05
                          "lr_decay_rate": 0.5, # Original Atari rate was 0.1
-                         "lr_decay_steps": 500,  # Original Atari was 350e3
+                         "lr_decay_steps": 5000000,  # Original Atari was 350e3
                          "momentum": 0.9  # Original was 0.9
                          }
     Q_writer = Queue()
@@ -59,7 +59,7 @@ if __name__ == '__main__':
     # Add samples to experience replay
     for i in range(N_episodes):
         # Sample epiosde length
-        episode_len = 10 #np.random.randint(1, max_episode_len)
+        episode_len = 50 #np.random.randint(1, max_episode_len)
 
         S_stack = np.random.rand(episode_len, 1, obs_size[0], obs_size[1]).astype(np.float32)
         S_stack[:, 0,  :, :] = np.arange(episode_len)[:,None, None]
