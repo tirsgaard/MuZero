@@ -168,6 +168,8 @@ class model_trainer:
             # Optimize
             self.optimizer.zero_grad()
             new_S = self.h_model.forward(S_batch[:,-1]) # Only the most recent of the unrolled observations are used
+
+            """
             for k in range(self.K):
                 P_batch, v_batch = self.f_model.forward(new_S)
                 Sa_batch = stack_a_torch(new_S, a_batch[:, k], self.hidden_S_size, self.action_size)
@@ -185,7 +187,26 @@ class model_trainer:
                                                           z_batch, v_batches,
                                                           pi_batch, P_batches,
                                                           P_imp, self.ER.N, self.beta)
+            """
 
+            P_batch, v_batch = self.f_model.forward(new_S)
+            Sa_batch = stack_a_torch(new_S, a_batch[:, 0], self.hidden_S_size, self.action_size)
+            new_S, r_batch = self.g_model.forward(Sa_batch)
+
+            loss1, r_loss1, v_loss1, P_loss1 = self.criterion(u_batch, r_batch,
+                                                          z_batch, v_batch,
+                                                          pi_batch, P_batch,
+                                                          P_imp, self.ER.N, self.beta)
+
+            P_batch, v_batch = self.f_model.forward(new_S)
+            Sa_batch = stack_a_torch(new_S, a_batch[:, 1], self.hidden_S_size, self.action_size)
+            new_S, r_batch = self.g_model.forward(Sa_batch)
+
+            loss2, r_loss2, v_loss2, P_loss2 = self.criterion(u_batch, r_batch,
+                                                              z_batch, v_batch,
+                                                              pi_batch, P_batch,
+                                                              P_imp, self.ER.N, self.beta)
+            loss = loss1 + loss2
             #for parms in self.f_model.parameters(): parms.retain_grad()
             #for parms in self.g_model.parameters(): parms.retain_grad()
             #for parms in self.h_model.parameters(): parms.retain_grad()
