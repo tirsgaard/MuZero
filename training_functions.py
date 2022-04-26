@@ -227,7 +227,7 @@ class model_trainer:
                 n_boot = self.experience_settings["n_bootstrap"]
                 gamma = self.MCTS_settings["gamma"]
                 for j in range(self.BS):
-                    done_mask = done_batch[j]
+                    done_mask = done_batch[j].detach().cpu()
                     done_mask[np.argmax(done_mask)] = 0  # Set the first encountered done value to be 0
                     for k in range(self.K-n_boot):  # This is the interval done values can be reasoned
                         # Prepare done tiling
