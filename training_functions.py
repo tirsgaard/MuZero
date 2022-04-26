@@ -155,6 +155,7 @@ class model_trainer:
         length_training = self.num_epochs
         # Train
         for i in range(length_training):
+            print(i)
             # Generate batch. Note we uniform sample instead of epoch as in the original paper
             S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, batch_idx, P_imp = self.ER.return_batches(self.BS,
                                                                                                             self.alpha,
@@ -193,18 +194,18 @@ class model_trainer:
             Sa_batch = stack_a_torch(new_S, a_batch[:, 0], self.hidden_S_size, self.action_size)
             new_S, r_batch = self.g_model.forward(Sa_batch)
 
-            loss1, r_loss1, v_loss1, P_loss1 = self.criterion(u_batch, r_batch,
-                                                          z_batch, v_batch,
-                                                          pi_batch, P_batch.unsqueeze(dim=1),
+            loss1, r_loss1, v_loss1, P_loss1 = self.criterion(u_batch[:,0], r_batch,
+                                                          z_batch[:,0], v_batch,
+                                                          pi_batch[:,0], P_batch.unsqueeze(dim=1),
                                                           P_imp, self.ER.N, self.beta)
 
             P_batch, v_batch = self.f_model.forward(new_S)
             Sa_batch = stack_a_torch(new_S, a_batch[:, 1], self.hidden_S_size, self.action_size)
             new_S, r_batch = self.g_model.forward(Sa_batch)
 
-            loss2, r_loss2, v_loss2, P_loss2 = self.criterion(u_batch, r_batch,
-                                                              z_batch, v_batch,
-                                                              pi_batch, P_batch.unsqueeze(dim=1),
+            loss2, r_loss2, v_loss2, P_loss2 = self.criterion(u_batch[:,1], r_batch,
+                                                              z_batch[:,1], v_batch,
+                                                              pi_batch[:,1], P_batch.unsqueeze(dim=1),
                                                               P_imp, self.ER.N, self.beta)
             loss = loss1 + loss2
             r_loss = (r_loss1 + r_loss2)/2

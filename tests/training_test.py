@@ -27,15 +27,15 @@ if __name__ == '__main__':
                         "sequence_length": 100,  # The number of frames in each sequence
                         "n_bootstrap": 1,  # Number of steps forward to bootstrap from
                         "past_obs": 6,
-                        "K": 1  # Number of steps to unroll during training. Needed here to determine delay of sending
+                        "K": 2  # Number of steps to unroll during training. Needed here to determine delay of sending
                        }
     training_settings = {"train_batch_size": 8,  # Batch size on GPU during training
                          "num_epochs": 4*10**4,
                          "alpha": 1,
                          "beta": 1,
-                         "lr_init": 0.0005,  # Original Atari rate was 0.05
+                         "lr_init": 1.*10**-5,  # Original Atari rate was 0.05
                          "lr_decay_rate": 0.5, # Original Atari rate was 0.1
-                         "lr_decay_steps": 5000000,  # Original Atari was 350e3
+                         "lr_decay_steps": 10000,  # Original Atari was 350e3
                          "momentum": 0.9  # Original was 0.9
                          }
     Q_writer = Queue()
