@@ -17,6 +17,7 @@ from torch.optim.lr_scheduler import StepLR
 from storage_functions import experience_replay_server
 from torch.utils.tensorboard import SummaryWriter
 from models import stack_a_torch
+import torch.nn as nn
 import warnings
 
 def save_model(model):
@@ -141,6 +142,15 @@ class model_trainer:
         self.g_model.to(self.device).train()
         self.h_model.to(self.device).train()
 
+        for m in self.f_model.modules():
+            if isinstance(m, nn.BatchNorm2d):
+                m.eval()
+        for m in self.g_model.modules():
+            if isinstance(m, nn.BatchNorm2d):
+                m.eval()
+        for m in self.h_model.modules():
+            if isinstance(m, nn.BatchNorm2d):
+                m.eval()
 
         length_training = self.num_epochs
         # Train

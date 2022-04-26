@@ -33,7 +33,7 @@ if __name__ == '__main__':
                          "num_epochs": 4*10**4,
                          "alpha": 1,
                          "beta": 1,
-                         "lr_init": 0.001,  # Original Atari rate was 0.05
+                         "lr_init": 0.0005,  # Original Atari rate was 0.05
                          "lr_decay_rate": 0.5, # Original Atari rate was 0.1
                          "lr_decay_steps": 5000000,  # Original Atari was 350e3
                          "momentum": 0.9  # Original was 0.9
@@ -59,7 +59,7 @@ if __name__ == '__main__':
     # Add samples to experience replay
     for i in range(N_episodes):
         # Sample epiosde length
-        episode_len = 50 #np.random.randint(1, max_episode_len)
+        episode_len = 2*256+2 #np.random.randint(1, max_episode_len)
 
         S_stack = np.random.rand(episode_len, 1, obs_size[0], obs_size[1]).astype(np.float32)
         S_stack[:, 0,  :, :] = np.arange(episode_len)[:,None, None]
@@ -84,132 +84,6 @@ if __name__ == '__main__':
     time.sleep(0.1)
     while not ex_Q.empty():
         EX_server.recv_store()
-
-    """
-    def resnet40(in_channels, filter_size=128, board_size=9, deepths=[19]):
-        return ResNet(in_channels, filter_size, board_size, block=ResNetBasicBlock, deepths=deepths)
-
-
-    class dummy_networkG(nn.Module):
-        def __init__(self, input_shape, output1_shape, hidden_size):
-            super().__init__()
-            self.input_shape = input_shape
-            self.output1_shape = output1_shape
-            self.hidden_size = hidden_size
-
-            # Hidden state head
-            self.layer1_1 = nn.Linear(np.prod(input_shape), self.hidden_size)
-            self.activation1_1 = nn.ReLU()
-            self.layer1_2 = nn.Linear(self.hidden_size, np.prod(output1_shape))
-            self.activation1_2 = nn.ReLU()
-            # Reward head
-            self.layer2_1 = nn.Linear(np.prod(input_shape), self.hidden_size)
-            self.activation2_1 = nn.ReLU()
-            self.layer2_2 = nn.Linear(self.hidden_size, 1)
-
-        def forward(self, x):
-            bs = x.shape[0]
-            x_flat = x.view((bs,  ) + (np.prod(self.input_shape),))  # Flatten
-            # Hidden state
-            S = self.activation1_1(self.layer1_1(x_flat))
-            S = self.activation1_2(self.layer1_2(S))
-            S = torch.reshape(S, (bs,) + self.output1_shape)  # Residual connection
-            # Reward state
-            reward = self.activation2_1(self.layer2_1(x_flat))
-            reward = self.layer2_2(reward)
-            return [S, reward]
-
-    class dummy_networkH(nn.Module):
-        def __init__(self, input_shape, output1_shape, hidden_size):
-            super().__init__()
-            self.input_shape = input_shape
-            self.output1_shape = output1_shape
-            self.hidden_size = hidden_size
-            self.layer1_1 = nn.Linear(np.prod(input_shape), self.hidden_size)
-            self.activation1_1 = nn.ReLU()
-            self.layer1_2 = nn.Linear(self.hidden_size, np.prod(output1_shape))
-            self.activation1_2 = nn.ReLU()
-
-        def forward(self, x):
-            bs = x.shape[0]
-            x_flat = x.view((-1, ) + (np.prod(self.input_shape),))  # Flatten
-            S = self.activation1_1(self.layer1_1(x_flat))
-            S = self.activation1_2(self.layer1_2(S))  # Residual connection
-            S = torch.reshape(S, (bs,1) + self.output1_shape)
-            return S
-
-    class dummy_networkF(nn.Module):
-        def __init__(self, input_shape, output1_shape, hidden_size):
-            super(dummy_networkF, self).__init__()
-            self.input_shape = input_shape
-            self.output1_shape = output1_shape
-            self.hidden_size = hidden_size
-            # Policy head
-            self.layer1_1 = nn.Linear(np.prod(input_shape), self.hidden_size)
-            self.activation1_1 = nn.ReLU()
-            self.layer1_2 = nn.Linear(self.hidden_size, np.prod(output1_shape))
-            self.activation1_2 = nn.Softmax(dim=1)
-            # Value head
-            self.layer2_1 = nn.Linear(np.prod(input_shape), self.hidden_size)
-            self.activation2_1 = nn.ReLU()
-            self.layer2_2 = nn.Linear(self.hidden_size, 1)
-
-        def forward(self, x):
-            x_flat = x.view((-1, ) + (np.prod(self.input_shape),) )  # Flatten
-            # Policy head
-            policy = self.activation1_1(self.layer1_1(x_flat))
-            policy = self.activation1_2(self.layer1_2(policy))
-            policy = torch.reshape(policy, (-1,) + self.output1_shape)  # Residual connection
-            # Value head
-            value = self.activation2_1(self.layer2_1(x_flat))
-            value = self.layer2_2(value)
-            return [policy, value]
-
-
-    class Net(nn.Module):
-        def __init__(self, output_shape):
-            super().__init__()
-            self.output_shape = output_shape
-            self.conv1 = nn.Conv2d(1, 16, 3, padding=1)
-            self.conv2 = nn.Conv2d(16, 32, 3, padding=1)
-            self.fc1 = nn.Linear(2*144, 128)
-            self.fc2 = nn.Linear(128, 64)
-            self.fc3 = nn.Linear(64, np.prod(self.output_shape))
-
-        def forward(self, x):
-            x = F.relu(self.conv1(x))
-            x = F.relu(self.conv2(x))
-            x = torch.flatten(x, 1)  # flatten all dimensions except batch
-            x = F.relu(self.fc1(x))
-            x = F.relu(self.fc2(x))
-            x = self.fc3(x)
-            x = x.reshape((x.shape[0],1) + self.output_shape)
-            return x
-
-    class TwoNet(nn.Module):
-        def __init__(self, input_channel, planes, policy_shape, policy_channels):
-            super().__init__()
-            self.policy_shape = policy_shape
-            self.policy_channels = policy_channels
-            self.conv1 = nn.Conv2d(input_channel, 16, 3, padding=1)
-            self.conv2 = nn.Conv2d(16, 32, 3, padding=1)
-            self.fc1 = nn.Linear(144*2, 128)
-            self.fc2 = nn.Linear(128, 64)
-            self.policyHead = nn.Linear(64,  np.prod(self.policy_shape)*self.policy_channels)
-            self.valueHead = nn.Linear(64, 1)
-
-        def forward(self, x):
-            x = F.relu(self.conv1(x))
-            x = F.relu(self.conv2(x))
-            x = torch.flatten(x, 1)  # flatten all dimensions except batch
-            x = F.relu(self.fc1(x))
-            x = F.relu(self.fc2(x))
-            policy = self.policyHead(x)
-            value = self.valueHead(x)
-            policy = policy.reshape((policy.shape[0], self.policy_channels) + self.policy_shape)
-            return policy, value
-    """
-
 
     class h_resnet(nn.Module):
         def __init__(self):
@@ -274,21 +148,28 @@ if __name__ == '__main__':
     graph.save('rnn_hiddenlayer', format='png')
     """
 
-    torch.multiprocessing.set_start_method('spawn', force=True)
+    torch.multiprocessing.set_start_method('fork', force=True)
     wr_worker = Process(target=writer_worker, args=(Q_writer,))
     wr_worker.start()
 
-    lr_list = torch.linspace(0, -3, 5)
-    lr_list = 10**lr_list
+    f_model = f_resnet()  # dummy_networkF(hidden_shape, action_size, 4)
+    g_model = g_resnet()  # TwoNet(5, 32, hidden_shape, 1)  # dummy_networkG((5,)+hidden_shape, (1,)+hidden_shape, 64)
+    h_model = h_resnet()
+    trainer = model_trainer(f_model, g_model, h_model, EX_server, experience_settings, training_settings, MCTS_settings)
 
+    # GPU things
+    cuda = torch.cuda.is_available()
+    device = torch.device("cuda:0" if cuda else "cpu")
+    if cuda:
+        torch.set_default_tensor_type("torch.cuda.FloatTensor")
+    else:
+        torch.set_default_tensor_type("torch.FloatTensor")
+    if cuda:
+        f_model.to(device)
+        g_model.to(device)
+        h_model.to(device)
 
-    min_vals = []
-    for lr in lr_list:
-        f_model = f_resnet() #dummy_networkF(hidden_shape, action_size, 4)
-        g_model = g_resnet()#TwoNet(5, 32, hidden_shape, 1)  # dummy_networkG((5,)+hidden_shape, (1,)+hidden_shape, 64)
-        h_model = h_resnet()
-        trainer = model_trainer(f_model, g_model, h_model, EX_server, experience_settings, training_settings, MCTS_settings)
-        trainer.train()
+    trainer.train()
 
 
 
