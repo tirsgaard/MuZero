@@ -207,6 +207,9 @@ class model_trainer:
                                                               pi_batch, P_batch,
                                                               P_imp, self.ER.N, self.beta)
             loss = loss1 + loss2
+            r_loss = r_loss1 + r_loss2
+            v_loss = v_loss1 + v_loss2
+            P_loss = P_loss1 + P_loss2
             #for parms in self.f_model.parameters(): parms.retain_grad()
             #for parms in self.g_model.parameters(): parms.retain_grad()
             #for parms in self.h_model.parameters(): parms.retain_grad()
@@ -254,7 +257,7 @@ class model_trainer:
                 self.wr_Q.put(['scalar', 'Value_loss/train', v_loss.mean().detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Policy_loss/train', P_loss.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['scalar', 'learning_rate', self.scheduler.get_last_lr()[0], self.training_counter])
-            """
+
             if self.training_counter % 100 == 0:
                 # Weights
                 i = 0
@@ -290,7 +293,7 @@ class model_trainer:
                         ['scalar', 'mean_gradient/model_h/layer' + str(i), torch.abs(parms.grad).mean().detach().cpu(),
                          self.training_counter])
                     i += 1
-            """
+
 
             self.training_counter += 1
 
