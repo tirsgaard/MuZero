@@ -207,9 +207,9 @@ class model_trainer:
                                                               pi_batch, P_batch.unsqueeze(dim=1),
                                                               P_imp, self.ER.N, self.beta)
             loss = loss1 + loss2
-            r_loss = r_loss1 + r_loss2
-            v_loss = v_loss1 + v_loss2
-            P_loss = P_loss1 + P_loss2
+            r_loss = (r_loss1 + r_loss2)/2
+            v_loss = (v_loss1 + v_loss2)/2
+            P_loss = (P_loss1 + P_loss2)/2
             #for parms in self.f_model.parameters(): parms.retain_grad()
             #for parms in self.g_model.parameters(): parms.retain_grad()
             #for parms in self.h_model.parameters(): parms.retain_grad()
