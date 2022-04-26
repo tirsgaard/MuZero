@@ -148,7 +148,7 @@ if __name__ == '__main__':
     graph.save('rnn_hiddenlayer', format='png')
     """
 
-    torch.multiprocessing.set_start_method('fork', force=True)
+    torch.multiprocessing.set_start_method('spawn', force=True)
     wr_worker = Process(target=writer_worker, args=(Q_writer,))
     wr_worker.start()
 

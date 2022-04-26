@@ -195,7 +195,7 @@ class model_trainer:
 
             loss1, r_loss1, v_loss1, P_loss1 = self.criterion(u_batch, r_batch,
                                                           z_batch, v_batch,
-                                                          pi_batch, P_batch,
+                                                          pi_batch, P_batch.unsqueeze(dim=1),
                                                           P_imp, self.ER.N, self.beta)
 
             P_batch, v_batch = self.f_model.forward(new_S)
@@ -204,7 +204,7 @@ class model_trainer:
 
             loss2, r_loss2, v_loss2, P_loss2 = self.criterion(u_batch, r_batch,
                                                               z_batch, v_batch,
-                                                              pi_batch, P_batch,
+                                                              pi_batch, P_batch.unsqueeze(dim=1),
                                                               P_imp, self.ER.N, self.beta)
             loss = loss1 + loss2
             r_loss = r_loss1 + r_loss2
