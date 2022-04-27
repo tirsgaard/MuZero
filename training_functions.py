@@ -79,14 +79,17 @@ def load_latest_model():
 def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta):
     # Loss used for the games go, chess, and shogi. This uses the 2-norm difference of values
     def l_r(u_tens, r_tens):
+        assert(u_tens.shape == r_tens.shape)
         loss = (u_tens-r_tens)**2
         return loss
 
     def l_v(z_tens, v_tens):
+        assert (z_tens.shape == v_tens.shape)
         loss = (z_tens-v_tens)**2
         return loss
 
     def l_p(pi_tens, P_tens):
+        assert (pi_tens.shape == P_tens.shape)
         loss = torch.sum((pi_tens-P_tens)**2, dim=2)
         return loss
 
@@ -95,15 +98,15 @@ def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta):
     policy_error = l_p(pi, P)
     total_error = reward_error + value_error + policy_error
     #total_error = torch.mean((total_error/(P_imp[:,None] * N))**beta)  # Scale gradient with importance weighting
-    total_error = torch.mean((total_error / N) ** beta)  # Scale gradient without importance weighting
+    #total_error = torch.mean((total_error / N) ** beta)  # Scale gradient without importance weighting
     return total_error, reward_error.mean(), value_error.mean(), policy_error.mean()
 
 
 class model_trainer:
-    def __init__(self, f_model, g_model, h_model, expereince_replay, experience_settings, training_settings, MCTS_settings):
+    def __init__(self, f_model, g_model, h_model, experience_replay, experience_settings, training_settings, MCTS_settings):
         self.MCTS_settings = MCTS_settings
         self.criterion = muZero_games_loss
-        self.ER = expereince_replay
+        self.ER = experience_replay
         self.experience_settings = experience_settings
         self.K = experience_settings["K"]
         self.num_epochs = training_settings["num_epochs"]
@@ -170,9 +173,10 @@ class model_trainer:
             P_batches = []
             # Optimize
             self.optimizer.zero_grad()
-            new_S = self.h_model.forward(S_batch[:,-1]) # Only the most recent of the unrolled observations are used
+
 
             """
+            new_S = self.h_model.forward(S_batch[:,-1]) # Only the most recent of the unrolled observations are used
             for k in range(self.K):
                 P_batch, v_batch = self.f_model.forward(new_S)
                 Sa_batch = stack_a_torch(new_S, a_batch[:, k], self.hidden_S_size, self.action_size)
