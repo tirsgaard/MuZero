@@ -13,7 +13,7 @@ import time
 import torch
 import sys
 import torch.optim as optim
-from torch.optim.lr_scheduler import StepLR
+from torch.optim.lr_scheduler import StepLR, ReduceLROnPlateau
 from storage_functions import experience_replay_server
 from torch.utils.tensorboard import SummaryWriter
 from models import stack_a_torch
@@ -134,8 +134,8 @@ class model_trainer:
         model_list = list(self.f_model.parameters()) + list(self.h_model.parameters()) + list(self.g_model.parameters())
         self.optimizer = optim.SGD(model_list, lr=self.lr_init, momentum=self.momentum)
         gamma = self.lr_decay_rate ** (1 / self.lr_decay_steps)
-        self.scheduler = StepLR(self.optimizer, step_size=1, gamma=gamma)
-
+        #self.scheduler = StepLR(self.optimizer, step_size=1, gamma=gamma)
+        self.scheduler = ReduceLROnPlateau(self.optimizer, 'min')
     def convert_torch(self, tensors):
         converted = []
         for tensor in tensors:
@@ -157,15 +157,6 @@ class model_trainer:
             if isinstance(m, nn.BatchNorm2d):
                 m.eval()
         """
-        for m in self.f_model.modules():
-            if isinstance(m, nn.BatchNorm2d):
-                m.momentum = 0.01
-        for m in self.g_model.modules():
-            if isinstance(m, nn.BatchNorm2d):
-                m.momentum = 0.01
-        for m in self.h_model.modules():
-            if isinstance(m, nn.BatchNorm2d):
-                m.momentum = 0.01
         length_training = self.num_epochs
         # Train
         for i in range(length_training):
@@ -182,51 +173,6 @@ class model_trainer:
             P_batches = []
             # Optimize
             self.optimizer.zero_grad()
-
-
-            """
-            new_S = self.h_model.forward(S_batch[:,-1]) # Only the most recent of the unrolled observations are used
-            for k in range(self.K):
-                P_batch, v_batch = self.f_model.forward(new_S)
-                Sa_batch = stack_a_torch(new_S, a_batch[:, k], self.hidden_S_size, self.action_size)
-                new_S, r_batch = self.g_model.forward(Sa_batch)
-
-                p_vals.append(torch.abs(v_batch.squeeze(dim=1) - z_batch[:, k]).detach().cpu().numpy())  # For importance weighting
-                P_batches.append(P_batch)
-                v_batches.append(v_batch)
-                r_batches.append(r_batch)
-
-            P_batches = torch.stack(P_batches, dim=1)
-            v_batches = torch.stack(v_batches, dim=1).squeeze(dim=2)
-            r_batches = torch.stack(r_batches, dim=1).squeeze(dim=2)
-            loss, r_loss, v_loss, P_loss = self.criterion(u_batch, r_batches,
-                                                          z_batch, v_batches,
-                                                          pi_batch, P_batches,
-                                                          P_imp, self.ER.N, self.beta)
-            """
-            """
-            P_batch, v_batch = self.f_model.forward(new_S)
-            Sa_batch = stack_a_torch(new_S, a_batch[:, 0], self.hidden_S_size, self.action_size)
-            new_S, r_batch = self.g_model.forward(Sa_batch)
-
-            loss1, r_loss1, v_loss1, P_loss1 = self.criterion(u_batch[:,0], r_batch,
-                                                          z_batch[:,0], v_batch,
-                                                          pi_batch[:,0], P_batch.unsqueeze(dim=1),
-                                                          P_imp, self.ER.N, self.beta)
-
-            P_batch, v_batch = self.f_model.forward(new_S)
-            Sa_batch = stack_a_torch(new_S, a_batch[:, 1], self.hidden_S_size, self.action_size)
-            new_S, r_batch = self.g_model.forward(Sa_batch)
-
-            loss2, r_loss2, v_loss2, P_loss2 = self.criterion(u_batch[:,1], r_batch,
-                                                              z_batch[:,1], v_batch,
-                                                              pi_batch[:,1], P_batch.unsqueeze(dim=1),
-                                                              P_imp, self.ER.N, self.beta)
-            loss = loss1 + loss2
-            r_loss = (r_loss1 + r_loss2)/2
-            v_loss = (v_loss1 + v_loss2)/2
-            P_loss = (P_loss1 + P_loss2)/2
-            """
             P_batches, v_batches, r_batches, p_vals = self.muZero(S_batch, a_batch, z_batch)
             loss, r_loss, v_loss, P_loss = self.criterion(u_batch, r_batches,
                                                           z_batch, v_batches,
@@ -240,6 +186,7 @@ class model_trainer:
             loss.backward()
             self.optimizer.step()
             self.scheduler.step()
+            self.scheduler.step(loss)
 
             #self.ER.update_weightings(p_vals[0], batch_idx)
 
