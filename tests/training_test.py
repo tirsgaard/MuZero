@@ -135,6 +135,8 @@ if __name__ == '__main__':
             policy = policy.reshape((policy.shape[0],) + MCTS_settings["action_size"])
             return policy, value
 
+
+
     hidden_shape = (3,3)
     """
     import hiddenlayer as hl

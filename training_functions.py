@@ -18,6 +18,7 @@ from storage_functions import experience_replay_server
 from torch.utils.tensorboard import SummaryWriter
 from models import stack_a_torch
 import torch.nn as nn
+from models import muZero
 import warnings
 
 def save_model(model):
@@ -126,6 +127,7 @@ class model_trainer:
         self.f_model = f_model
         self.g_model = g_model
         self.h_model = h_model
+        self.muZero = muZero(self.f_model, self.g_model, self.h_model, self.K, self.hidden_S_size, self.action_size)
         model_list = list(self.f_model.parameters()) + list(self.h_model.parameters()) + list(self.g_model.parameters())
         self.optimizer = optim.SGD(model_list, lr=self.lr_init, momentum=self.momentum)
         gamma = self.lr_decay_rate ** (1 / self.lr_decay_steps)
@@ -155,7 +157,7 @@ class model_trainer:
         length_training = self.num_epochs
         # Train
         for i in range(length_training):
-            print(i)
+            #print(i)
             # Generate batch. Note we uniform sample instead of epoch as in the original paper
             S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, batch_idx, P_imp = self.ER.return_batches(self.BS,
                                                                                                             self.alpha,
@@ -189,7 +191,7 @@ class model_trainer:
                                                           pi_batch, P_batches,
                                                           P_imp, self.ER.N, self.beta)
             """
-
+            """
             P_batch, v_batch = self.f_model.forward(new_S)
             Sa_batch = stack_a_torch(new_S, a_batch[:, 0], self.hidden_S_size, self.action_size)
             new_S, r_batch = self.g_model.forward(Sa_batch)
@@ -211,6 +213,13 @@ class model_trainer:
             r_loss = (r_loss1 + r_loss2)/2
             v_loss = (v_loss1 + v_loss2)/2
             P_loss = (P_loss1 + P_loss2)/2
+            """
+            P_batches, v_batches, r_batches, p_vals = self.muZero(S_batch, a_batch, z_batch)
+            loss, r_loss, v_loss, P_loss = self.criterion(u_batch, r_batches,
+                                                          z_batch, v_batches,
+                                                          pi_batch, P_batches,
+                                                          P_imp, self.ER.N, self.beta)
+
             #for parms in self.f_model.parameters(): parms.retain_grad()
             #for parms in self.g_model.parameters(): parms.retain_grad()
             #for parms in self.h_model.parameters(): parms.retain_grad()
@@ -245,9 +254,9 @@ class model_trainer:
 
                 self.wr_Q.put(['scalar', 'oracle/r', torch.max(torch.abs(S_batch[:, -1, 0, 0, 0] - u_batch[:, 0])).detach().cpu(), self.training_counter])
 
-                self.wr_Q.put(['dist', 'Output/v', v_batch.detach().cpu(), self.training_counter])
-                self.wr_Q.put(['dist', 'Output/P', P_batch.detach().cpu(), self.training_counter])
-                self.wr_Q.put(['dist', 'Output/r', r_batch.detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'Output/v', v_batches.detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'Output/P', P_batches.detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'Output/r', r_batches.detach().cpu(), self.training_counter])
 
                 self.wr_Q.put(['dist', 'data/u', u_batch.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'data/z', z_batch.detach().cpu(), self.training_counter])

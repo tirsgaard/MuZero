@@ -100,6 +100,38 @@ class dummy_networkF(nn.Module):
         value = value
         return [policy, value]
 
+class muZero(nn.Module):
+    def __init__(self, f_model, g_model, h_model, K, hidden_S_size, action_size):
+        super().__init__()
+        self.f_model = f_model
+        self.g_model = g_model
+        self.h_model = h_model
+        self.K = K
+        self.hidden_S_size = hidden_S_size
+        self.action_size = action_size
+
+    def forward(self, x, a_batch, z_batch):
+        p_vals = []  # Number
+        r_batches = []
+        v_batches = []
+        P_batches = []
+        new_S = self.h_model.forward(x[:, -1])  # Only the most recent of the unrolled observations are used
+        for k in range(self.K):
+            P_batch, v_batch = self.f_model.forward(new_S)
+            Sa_batch = stack_a_torch(new_S, a_batch[:, k], self.hidden_S_size, self.action_size)
+            new_S, r_batch = self.g_model.forward(Sa_batch)
+
+            p_vals.append(torch.abs(v_batch.squeeze(dim=1) - z_batch[:, k]).detach().cpu().numpy())  # For importance weighting
+            P_batches.append(P_batch)
+            v_batches.append(v_batch)
+            r_batches.append(r_batch)
+
+        P_batches = torch.stack(P_batches, dim=1)
+        v_batches = torch.stack(v_batches, dim=1).squeeze(dim=2)
+        r_batches = torch.stack(r_batches, dim=1).squeeze(dim=2)
+
+        return P_batches, v_batches, r_batches, p_vals
+
 def h_scale(x, epsilon = 0.01):
     y = torch.sign(x)*(torch.sqrt(torch.abs(x)+1)-1)+epsilon*x
     return y
