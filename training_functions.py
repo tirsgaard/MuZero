@@ -99,7 +99,7 @@ def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta):
     total_error = reward_error + value_error + policy_error
     #total_error = torch.mean((total_error/(P_imp[:,None] * N))**beta)  # Scale gradient with importance weighting
     #total_error = torch.mean((total_error / N) ** beta)  # Scale gradient without importance weighting
-    return total_error, reward_error.mean(), value_error.mean(), policy_error.mean()
+    return total_error.mean(), reward_error.mean(), value_error.mean(), policy_error.mean()
 
 
 class model_trainer:
