@@ -146,7 +146,7 @@ class model_trainer:
         self.f_model.to(self.device).train()
         self.g_model.to(self.device).train()
         self.h_model.to(self.device).train()
-
+        """
         for m in self.f_model.modules():
             if isinstance(m, nn.BatchNorm2d):
                 m.eval()
@@ -156,7 +156,7 @@ class model_trainer:
         for m in self.h_model.modules():
             if isinstance(m, nn.BatchNorm2d):
                 m.eval()
-
+        """
         length_training = self.num_epochs
         # Train
         for i in range(length_training):
