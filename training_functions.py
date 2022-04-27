@@ -157,6 +157,15 @@ class model_trainer:
             if isinstance(m, nn.BatchNorm2d):
                 m.eval()
         """
+        for m in self.f_model.modules():
+            if isinstance(m, nn.BatchNorm2d):
+                m.momentum = 0.01
+        for m in self.g_model.modules():
+            if isinstance(m, nn.BatchNorm2d):
+                m.momentum = 0.01
+        for m in self.h_model.modules():
+            if isinstance(m, nn.BatchNorm2d):
+                m.momentum = 0.01
         length_training = self.num_epochs
         # Train
         for i in range(length_training):

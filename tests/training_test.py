@@ -29,7 +29,7 @@ if __name__ == '__main__':
                         "past_obs": 6,
                         "K": 2  # Number of steps to unroll during training. Needed here to determine delay of sending
                        }
-    training_settings = {"train_batch_size": 8,  # Batch size on GPU during training
+    training_settings = {"train_batch_size": 256,  # Batch size on GPU during training
                          "num_epochs": 4*10**4,
                          "alpha": 1,
                          "beta": 1,
@@ -59,10 +59,10 @@ if __name__ == '__main__':
     # Add samples to experience replay
     for i in range(N_episodes):
         # Sample epiosde length
-        episode_len = 2*256+2 #np.random.randint(1, max_episode_len)
+        episode_len = 1*256+2 #np.random.randint(1, max_episode_len)
 
         S_stack = np.random.rand(episode_len, 1, obs_size[0], obs_size[1]).astype(np.float32)
-        S_stack[:, 0,  :, :] = np.arange(episode_len)[:,None, None]
+        S_stack[:, 0,  0, 0] = np.arange(episode_len)
         #for ii in range(obs_size[0]):
         #    for jj in range(obs_size[1]):
         #        S_stack[:, ii, jj] = np.arange(episode_len)
