@@ -33,7 +33,7 @@ if __name__ == '__main__':
                          "num_epochs": 4*10**4,
                          "alpha": 1,
                          "beta": 1,
-                         "lr_init": 1.*10**-5,  # Original Atari rate was 0.05
+                         "lr_init": 1.*10**-8,  # Original Atari rate was 0.05
                          "lr_decay_rate": 0.5, # Original Atari rate was 0.1
                          "lr_decay_steps": 10000,  # Original Atari was 350e3
                          "momentum": 0.9  # Original was 0.9
@@ -53,7 +53,7 @@ if __name__ == '__main__':
     EX_server = experience_replay_server(ex_Q, experience_settings, MCTS_settings)
     EX_sender = experience_replay_sender(ex_Q, 1, gamma, experience_settings)
     np.random.seed(1)
-    N_episodes = 1
+    N_episodes = 2
     max_episode_len = 100
     total_samples = 0
     # Add samples to experience replay
@@ -110,7 +110,7 @@ if __name__ == '__main__':
                 "min_size": (64, 64),
                 "categories": 9,
             }
-            self.resnet =  ResNet(BasicBlock, [3, 3, 3, 3], inplanes = 5, num_classes = 1+9)
+            self.resnet =  ResNet(BasicBlock, [3, 3, 3, 3], inplanes = 3, num_classes = 1+9)
 
         def forward(self, x):
             x = self.resnet(x)

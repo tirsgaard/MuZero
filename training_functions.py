@@ -20,7 +20,7 @@ from models import stack_a_torch
 import torch.nn as nn
 from models import muZero
 import warnings
-
+# Disabled functions: action appending of hidden dynamic state
 def save_model(model):
     subdirectory = "model/saved_models/"
     os.makedirs(subdirectory, exist_ok=True)
@@ -132,10 +132,12 @@ class model_trainer:
         self.h_model = h_model
         self.muZero = muZero(self.f_model, self.g_model, self.h_model, self.K, self.hidden_S_size, self.action_size)
         model_list = list(self.f_model.parameters()) + list(self.h_model.parameters()) + list(self.g_model.parameters())
-        self.optimizer = optim.SGD(model_list, lr=self.lr_init, momentum=self.momentum)
+        #self.optimizer = optim.SGD(model_list, lr=self.lr_init, momentum=self.momentum)
+        self.optimizer = optim.SGD(self.muZero.parameters(), lr=self.lr_init, momentum=self.momentum)
         gamma = self.lr_decay_rate ** (1 / self.lr_decay_steps)
         #self.scheduler = StepLR(self.optimizer, step_size=1, gamma=gamma)
-        self.scheduler = ReduceLROnPlateau(self.optimizer, 'min')
+        self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', verbose=True, patience=0)
+
     def convert_torch(self, tensors):
         converted = []
         for tensor in tensors:
@@ -185,7 +187,8 @@ class model_trainer:
 
             loss.backward()
             self.optimizer.step()
-            self.scheduler.step()
+            #self.scheduler.step()
+            print(loss)
             self.scheduler.step(loss)
 
             #self.ER.update_weightings(p_vals[0], batch_idx)
@@ -226,7 +229,7 @@ class model_trainer:
                 self.wr_Q.put(['scalar', 'Reward_loss/train', r_loss.mean().detach().cpu(), self.training_counter])
                 self.wr_Q.put(['scalar', 'Value_loss/train', v_loss.mean().detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Policy_loss/train', P_loss.detach().cpu(), self.training_counter])
-                self.wr_Q.put(['scalar', 'learning_rate', self.scheduler.get_last_lr()[0], self.training_counter])
+                self.wr_Q.put(['scalar', 'learning_rate', self.scheduler._last_lr[0], self.training_counter])
 
             if self.training_counter % 100 == 0:
                 # Weights
