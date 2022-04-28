@@ -100,7 +100,7 @@ def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta):
     reward_error = l_r(u, r)
     value_error = l_v(z, v)
     policy_error = l_p(pi, P)
-    total_error = reward_error
+    total_error = reward_error + value_error + policy_error
     #total_error = torch.mean((total_error/(P_imp[:,None] * N))**beta)  # Scale gradient with importance weighting
     #total_error = torch.mean((total_error / N) ** beta)  # Scale gradient without importance weighting
     return total_error.mean(), reward_error.mean(), value_error.mean(), policy_error.mean()
@@ -172,7 +172,8 @@ class model_trainer:
                                                                                                             self.alpha,
                                                                                                             self.K,
                                                                                                             uniform_sampling=True)
-            u_batch[u_batch[:, 1] == 0, 1] = 257
+            for k in range(1, self.K):
+                u_batch[u_batch[:, k] == 0, k] = u_batch[u_batch[:, k] == 0, k-1] + 1
             z_batch = u_batch.copy()
             S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp = self.convert_torch([S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp])
 
@@ -199,7 +200,8 @@ class model_trainer:
                                                                                                     uniform_sampling=True)
                 S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp = self.convert_torch(
                     [S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp])
-                u_batch[u_batch[:, 1] == 0, 1] = 257
+                for k in range(1, self.K):
+                    u_batch[u_batch[:, k] == 0, k] = u_batch[u_batch[:, k] == 0, k-1] + 1
                 z_batch = u_batch.clone()
                 S_val = torch.rand(S_batch.shape)
                 S_val[:, :, 0, 0] = S_batch[:, :, 0, 0]
@@ -249,7 +251,8 @@ class model_trainer:
                                self.training_counter])
                 """
                 self.wr_Q.put(['scalar', 'oracle/r', torch.max(torch.abs(S_batch[:, -1, 0, 0, 0] - u_batch[:, 0])).detach().cpu(), self.training_counter])
-                self.wr_Q.put(['scalar', 'oracle/r2', torch.max(torch.abs(S_batch[:, -1, 0, 0, 0] + 1 - u_batch[:, 1])).detach().cpu(),
+                for k in range(1, self.K):
+                    self.wr_Q.put(['scalar', 'oracle/r' + str(k+1), torch.max(torch.abs(S_batch[:, -1, 0, 0, 0] + k - u_batch[:, k])).detach().cpu(),
                      self.training_counter])
                 self.wr_Q.put(['dist', 'Output/v', v_batches.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Output/P', P_batches.detach().cpu(), self.training_counter])

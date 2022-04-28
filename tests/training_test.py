@@ -28,7 +28,7 @@ if __name__ == '__main__':
                         "sequence_length": 1000,  # The number of frames in each sequence
                         "n_bootstrap": 1,  # Number of steps forward to bootstrap from
                         "past_obs": 6,
-                        "K": 2  # Number of steps to unroll during training. Needed here to determine delay of sending
+                        "K": 3  # Number of steps to unroll during training. Needed here to determine delay of sending
                        }
     training_settings = {"train_batch_size": 256,  # Batch size on GPU during training
                          "num_epochs": 4*10**4,
