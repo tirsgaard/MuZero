@@ -163,20 +163,29 @@ class model_trainer:
             if isinstance(m, nn.BatchNorm2d):
                 m.eval()
         """
+        for m in self.f_model.modules():
+            if isinstance(m, nn.BatchNorm2d):
+                m.track_running_stats = False
+        for m in self.g_model.modules():
+            if isinstance(m, nn.BatchNorm2d):
+                m.track_running_stats = False
+        for m in self.h_model.modules():
+            if isinstance(m, nn.BatchNorm2d):
+                m.track_running_stats = False
+
         length_training = self.num_epochs
         # Train
         for i in range(length_training):
-            #print(i)
             # Generate batch. Note we uniform sample instead of epoch as in the original paper
             S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, batch_idx, P_imp = self.ER.return_batches(self.BS,
                                                                                                             self.alpha,
                                                                                                             self.K,
                                                                                                             uniform_sampling=True)
             S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp = self.convert_torch([S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp])
-            p_vals = []  # Number
-            r_batches = []
-            v_batches = []
-            P_batches = []
+            #S_batch.requires_grad_()
+
+
+
             # Optimize
             self.optimizer.zero_grad()
             P_batches, v_batches, r_batches, p_vals = self.muZero(S_batch, a_batch, z_batch)
@@ -184,14 +193,8 @@ class model_trainer:
                                                           z_batch, v_batches,
                                                           pi_batch, P_batches,
                                                           P_imp, self.ER.N, self.beta)
-
-            #for parms in self.f_model.parameters(): parms.retain_grad()
-            #for parms in self.g_model.parameters(): parms.retain_grad()
-            #for parms in self.h_model.parameters(): parms.retain_grad()
-
             loss.backward()
             self.optimizer.step()
-            #self.scheduler.step()
             self.scheduler.step(loss)
 
             #self.ER.update_weightings(p_vals[0], batch_idx)
