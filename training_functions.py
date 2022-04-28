@@ -20,7 +20,11 @@ from models import stack_a_torch
 import torch.nn as nn
 from models import muZero
 import warnings
-# Disabled functions: action appending of hidden dynamic state
+# 1. Disabled functions: action appending of hidden dynamic state
+# 2. Exponential reduction of learning rate, instead reduce on platau
+# 3. Unrolling of K
+# 4. priority sampling
+# 5. loss scaling
 def save_model(model):
     subdirectory = "model/saved_models/"
     os.makedirs(subdirectory, exist_ok=True)
@@ -136,7 +140,7 @@ class model_trainer:
         self.optimizer = optim.SGD(self.muZero.parameters(), lr=self.lr_init, momentum=self.momentum)
         gamma = self.lr_decay_rate ** (1 / self.lr_decay_steps)
         #self.scheduler = StepLR(self.optimizer, step_size=1, gamma=gamma)
-        self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', verbose=True, patience=0)
+        self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', verbose=True, patience=0, eps=0)
 
     def convert_torch(self, tensors):
         converted = []
@@ -188,7 +192,6 @@ class model_trainer:
             loss.backward()
             self.optimizer.step()
             #self.scheduler.step()
-            print(loss)
             self.scheduler.step(loss)
 
             #self.ER.update_weightings(p_vals[0], batch_idx)

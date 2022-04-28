@@ -27,7 +27,7 @@ if __name__ == '__main__':
                         "sequence_length": 100,  # The number of frames in each sequence
                         "n_bootstrap": 1,  # Number of steps forward to bootstrap from
                         "past_obs": 6,
-                        "K": 2  # Number of steps to unroll during training. Needed here to determine delay of sending
+                        "K": 1  # Number of steps to unroll during training. Needed here to determine delay of sending
                        }
     training_settings = {"train_batch_size": 256,  # Batch size on GPU during training
                          "num_epochs": 4*10**4,
@@ -110,7 +110,7 @@ if __name__ == '__main__':
                 "min_size": (64, 64),
                 "categories": 9,
             }
-            self.resnet =  ResNet(BasicBlock, [3, 3, 3, 3], inplanes = 3, num_classes = 1+9)
+            self.resnet =  ResNet(BasicBlock, [3, 3, 3, 3], inplanes = 1, num_classes = 1+9)
 
         def forward(self, x):
             x = self.resnet(x)

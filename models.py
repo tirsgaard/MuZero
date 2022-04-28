@@ -116,6 +116,7 @@ class muZero(nn.Module):
         v_batches = []
         P_batches = []
         new_S = self.h_model.forward(S[:, -1])  # Only the most recent of the unrolled observations are used
+        """
         for k in range(self.K):
             P_batch, v_batch = self.f_model.forward(new_S)
             Sa_batch = new_S# stack_a_torch(new_S, a_batch[:, k], self.hidden_S_size, self.action_size)
@@ -129,8 +130,11 @@ class muZero(nn.Module):
         P_batches = torch.stack(P_batches, dim=1)
         v_batches = torch.stack(v_batches, dim=1).squeeze(dim=2)
         r_batches = torch.stack(r_batches, dim=1).squeeze(dim=2)
+        """
+        P_batches, v_batches = self.f_model.forward(new_S)
+        new_S, r_batches = self.g_model.forward(new_S)
 
-        return P_batches, v_batches, r_batches, p_vals
+        return P_batches.unsqueeze(1), v_batches, r_batches, p_vals
 
 def h_scale(x, epsilon = 0.01):
     y = torch.sign(x)*(torch.sqrt(torch.abs(x)+1)-1)+epsilon*x
