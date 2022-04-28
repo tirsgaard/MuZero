@@ -172,8 +172,10 @@ class model_trainer:
                                                                                                             self.alpha,
                                                                                                             self.K,
                                                                                                             uniform_sampling=True)
+            u_batch[u_batch[:, 1] == 0, 1] = 257
             z_batch = u_batch.copy()
             S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp = self.convert_torch([S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp])
+
             # Optimize
             self.optimizer.zero_grad()
             P_batches, v_batches, r_batches, p_vals = self.muZero.forward(S_batch, a_batch, z_batch)
@@ -197,6 +199,7 @@ class model_trainer:
                                                                                                     uniform_sampling=True)
                 S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp = self.convert_torch(
                     [S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp])
+                u_batch[u_batch[:, 1] == 0, 1] = 257
                 z_batch = u_batch.clone()
                 S_val = torch.rand(S_batch.shape)
                 S_val[:, :, 0, 0] = S_batch[:, :, 0, 0]
@@ -246,8 +249,7 @@ class model_trainer:
                                self.training_counter])
                 """
                 self.wr_Q.put(['scalar', 'oracle/r', torch.max(torch.abs(S_batch[:, -1, 0, 0, 0] - u_batch[:, 0])).detach().cpu(), self.training_counter])
-                self.wr_Q.put(
-                    ['scalar', 'oracle/r2', torch.max(torch.abs(S_batch[:, -1, 0, 0, 0] + 1 - u_batch[:, 1])).detach().cpu(),
+                self.wr_Q.put(['scalar', 'oracle/r2', torch.max(torch.abs(S_batch[:, -1, 0, 0, 0] + 1 - u_batch[:, 1])).detach().cpu(),
                      self.training_counter])
                 self.wr_Q.put(['dist', 'Output/v', v_batches.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Output/P', P_batches.detach().cpu(), self.training_counter])
