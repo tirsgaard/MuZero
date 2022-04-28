@@ -176,10 +176,6 @@ class muZero(nn.Module):
         r_batches = []
         v_batches = []
         P_batches = []
-        S_inter = torch.zeros((S.shape[0], self.K, 1, 3, 3))  # For testing
-        S_inter[:, :, 0, 0, 0] = S[:, -1, 0, 0, 0][:, None]
-        for k in range(self.K):
-            S_inter[:, k, 0, 0, 0] += k
 
         new_S = self.h_model.forward(S[:, -1])  # Only the most recent of the unrolled observations are used
         for k in range(self.K):

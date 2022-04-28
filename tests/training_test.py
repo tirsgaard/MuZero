@@ -86,6 +86,11 @@ if __name__ == '__main__':
     while not ex_Q.empty():
         EX_server.recv_store()
 
+
+    def gradient_clipper(model: nn.Module, val: float) -> nn.Module:
+        for parameter in model.parameters():
+            parameter.register_hook(lambda grad: grad / 2)
+        return model
     class h_resnet(nn.Module):
         def __init__(self):
             super().__init__()

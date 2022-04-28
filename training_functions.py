@@ -164,6 +164,7 @@ class model_trainer:
                 m.eval()
 
 
+
         length_training = self.num_epochs
         # Train
         for i in range(length_training):
@@ -271,6 +272,7 @@ class model_trainer:
             if self.training_counter % 100 == 101:
                 # Weights
                 i = 0
+                gradients = []
                 for parms in list(self.f_model.parameters()):
                     self.wr_Q.put(['dist', 'training/model_f/layer' + str(i), parms.detach().cpu(),
                                    self.training_counter])
@@ -278,12 +280,17 @@ class model_trainer:
                                    self.training_counter])
                     self.wr_Q.put(['scalar', 'mean_gradient/model_f/layer' + str(i), torch.abs(parms.grad).mean().detach().cpu(),
                                    self.training_counter])
+                    gradients.append(torch.abs(parms.grad).mean().detach().cpu())
                     i += 1
+                mean_grad = torch.median(gradients)
+                self.wr_Q.put(
+                    ['scalar', 'median_gradient/model_f' + str(i), mean_grad, self.training_counter])
 
                 i = 0
+                gradients = []
                 for parms in list(self.g_model.parameters()):
                     self.wr_Q.put(
-                        ['dist', 'training/model_f/layer' + str(i), parms.detach().cpu(),
+                        ['dist', 'training/model_g/layer' + str(i), parms.detach().cpu(),
                          self.training_counter])
                     self.wr_Q.put(['dist', 'gradient/model_g/layer' + str(i), torch.abs(parms.grad).detach().cpu(),
                                    self.training_counter])
@@ -291,8 +298,11 @@ class model_trainer:
                         ['scalar', 'mean_gradient/model_g/layer' + str(i), torch.abs(parms.grad).mean().detach().cpu(),
                          self.training_counter])
                     i += 1
+                mean_grad = torch.median(gradients)
+                self.wr_Q.put(['scalar', 'median_gradient/model_g' + str(i), mean_grad, self.training_counter])
 
                 i = 0
+                gradients = []
                 for parms in list(self.h_model.parameters()):
                     self.wr_Q.put(
                         ['dist', 'training/model_h/layer' + str(i), parms.detach().cpu(),
@@ -302,7 +312,9 @@ class model_trainer:
                     self.wr_Q.put(
                         ['scalar', 'mean_gradient/model_h/layer' + str(i), torch.abs(parms.grad).mean().detach().cpu(),
                          self.training_counter])
-                    i += 1
+                mean_grad = torch.median(gradients)
+                self.wr_Q.put(['scalar', 'median_gradient/model_h' + str(i), mean_grad, self.training_counter])
+                i += 1
 
 
             self.training_counter += 1
