@@ -125,7 +125,7 @@ class identity_networkF(nn.Module):
 
 class identity_networkH(nn.Module):
     def __init__(self, input_shape, output1_shape):
-        super(identity_networkH).__init__()
+        super(identity_networkH ,self).__init__()
         self.input_shape = input_shape
         self.output1_shape = output1_shape
         self.train_count = 0
@@ -141,7 +141,7 @@ class identity_networkH(nn.Module):
 
 class identity_networkG(nn.Module):
     def __init__(self, input_shape, output1_shape):
-        super().__init__()
+        super(identity_networkG, self).__init__()
         self.input_shape = input_shape
         self.output1_shape = output1_shape
         self.train_count = 0
@@ -150,7 +150,7 @@ class identity_networkG(nn.Module):
         self.layer1_1 = nn.Linear(np.prod(input_shape), np.prod(output1_shape))
         self.activation1_1 = nn.ReLU()
         # Reward head
-        self.layer2_1 = nn.Linear(np.prod(input_shape), self.hidden_size)
+        self.layer2_1 = nn.Linear(np.prod(input_shape), 1)
 
     def forward(self, x):
         x_flat = x.view((-1, ) + (np.prod(self.input_shape),))  # Flatten
@@ -163,7 +163,7 @@ class identity_networkG(nn.Module):
 
 class muZero(nn.Module):
     def __init__(self, f_model, g_model, h_model, K, hidden_S_size, action_size):
-        super().__init__()
+        super(muZero, self).__init__()
         self.f_model = f_model
         self.g_model = g_model
         self.h_model = h_model

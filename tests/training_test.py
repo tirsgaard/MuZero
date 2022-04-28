@@ -12,6 +12,7 @@ import torch
 import numpy as np
 import torch.nn.functional as F
 from resnet_model import ResNet
+from models import identity_networkH, identity_networkF, identity_networkG
 from torchvision.models.resnet import BasicBlock
 
 
@@ -27,7 +28,7 @@ if __name__ == '__main__':
                         "sequence_length": 1000,  # The number of frames in each sequence
                         "n_bootstrap": 1,  # Number of steps forward to bootstrap from
                         "past_obs": 6,
-                        "K": 2  # Number of steps to unroll during training. Needed here to determine delay of sending
+                        "K": 1  # Number of steps to unroll during training. Needed here to determine delay of sending
                        }
     training_settings = {"train_batch_size": 256,  # Batch size on GPU during training
                          "num_epochs": 4*10**4,
@@ -53,7 +54,7 @@ if __name__ == '__main__':
     EX_server = experience_replay_server(ex_Q, experience_settings, MCTS_settings)
     EX_sender = experience_replay_sender(ex_Q, 1, gamma, experience_settings)
     np.random.seed(1)
-    N_episodes = 2
+    N_episodes = 1000
     max_episode_len = 100
     total_samples = 0
     # Add samples to experience replay
@@ -154,9 +155,9 @@ if __name__ == '__main__':
     wr_worker = Process(target=writer_worker, args=(Q_writer,))
     wr_worker.start()
 
-    f_model = f_resnet()  # dummy_networkF(hidden_shape, action_size, 4)
-    g_model = g_resnet()  # TwoNet(5, 32, hidden_shape, 1)  # dummy_networkG((5,)+hidden_shape, (1,)+hidden_shape, 64)
-    h_model = h_resnet()
+    f_model = identity_networkF((1,3,3), (4,)) # dummy_networkF(hidden_shape, action_size, 4)
+    g_model = identity_networkG((1,3,3), (1,3,3))#g_resnet()  # TwoNet(5, 32, hidden_shape, 1)  # dummy_networkG((5,)+hidden_shape, (1,)+hidden_shape, 64)
+    h_model = identity_networkH((1,3,3), (1,3,3))
     trainer = model_trainer(f_model, g_model, h_model, EX_server, experience_settings, training_settings, MCTS_settings)
 
     # GPU things

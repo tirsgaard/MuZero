@@ -140,7 +140,7 @@ class model_trainer:
         self.optimizer = optim.SGD(self.muZero.parameters(), lr=self.lr_init, momentum=self.momentum)
         gamma = self.lr_decay_rate ** (1 / self.lr_decay_steps)
         #self.scheduler = StepLR(self.optimizer, step_size=1, gamma=gamma)
-        self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', verbose=True, patience=0, eps=0)
+        self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', verbose=True, patience=0, eps=1)
 
     def convert_torch(self, tensors):
         converted = []
@@ -182,6 +182,7 @@ class model_trainer:
                                                           pi_batch, P_batches,
                                                           P_imp, self.ER.N, self.beta)
             loss.backward()
+            print(loss)
             self.optimizer.step()
             self.scheduler.step(loss)
 
@@ -223,7 +224,7 @@ class model_trainer:
 
             # Log summary statistics
             if self.training_counter % 100 == 1:
-
+                """
                 z_loss = 0
                 n_boot = self.experience_settings["n_bootstrap"]
                 gamma = self.MCTS_settings["gamma"]
@@ -243,7 +244,7 @@ class model_trainer:
 
                 self.wr_Q.put(['scalar', 'oracle/max_v_loss', z_loss.detach().cpu(),
                                self.training_counter])
-
+                """
                 self.wr_Q.put(['scalar', 'oracle/r', torch.max(torch.abs(S_batch[:, -1, 0, 0, 0] - u_batch[:, 0])).detach().cpu(), self.training_counter])
 
                 self.wr_Q.put(['dist', 'Output/v', v_batches.detach().cpu(), self.training_counter])
@@ -260,7 +261,7 @@ class model_trainer:
                 self.wr_Q.put(['dist', 'Policy_loss/train', P_loss.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['scalar', 'learning_rate', self.scheduler._last_lr[0], self.training_counter])
             # Log gradients
-            if self.training_counter % 100 == 0:
+            if self.training_counter % 100 == 101:
                 # Weights
                 i = 0
                 for parms in list(self.f_model.parameters()):
