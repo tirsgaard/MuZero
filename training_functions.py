@@ -163,15 +163,6 @@ class model_trainer:
             if isinstance(m, nn.BatchNorm2d):
                 m.eval()
         """
-        for m in self.f_model.modules():
-            if isinstance(m, nn.BatchNorm2d):
-                m.track_running_stats = False
-        for m in self.g_model.modules():
-            if isinstance(m, nn.BatchNorm2d):
-                m.track_running_stats = False
-        for m in self.h_model.modules():
-            if isinstance(m, nn.BatchNorm2d):
-                m.track_running_stats = False
 
         length_training = self.num_epochs
         # Train
@@ -183,9 +174,6 @@ class model_trainer:
                                                                                                             uniform_sampling=True)
             S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp = self.convert_torch([S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp])
             #S_batch.requires_grad_()
-
-
-
             # Optimize
             self.optimizer.zero_grad()
             P_batches, v_batches, r_batches, p_vals = self.muZero(S_batch, a_batch, z_batch)
@@ -199,6 +187,16 @@ class model_trainer:
 
             #self.ER.update_weightings(p_vals[0], batch_idx)
 
+            if self.training_counter == 1000:
+                for m in self.f_model.modules():
+                    if isinstance(m, nn.BatchNorm2d):
+                        m.eval()
+                for m in self.g_model.modules():
+                    if isinstance(m, nn.BatchNorm2d):
+                        m.eval()
+                for m in self.h_model.modules():
+                    if isinstance(m, nn.BatchNorm2d):
+                        m.eval()
             if self.training_counter % 100 == 1:
 
                 z_loss = 0

@@ -102,7 +102,7 @@ class experience_replay_server:
                 P_temp = self.P / np.sum(self.P)
 
         # Select index of batches
-        batch_idx = np.random.choice(self.hist_size * self.seq_size, size=batch_size, p=P_temp, replace=False)  # Very slow
+        batch_idx = np.random.choice(self.hist_size * self.seq_size, size=batch_size, p=P_temp, replace=True)  # Very slow
         # Get values from batches
         S_batch = []
         a_batch = []
