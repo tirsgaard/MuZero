@@ -100,7 +100,7 @@ def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta):
     reward_error = l_r(u, r)
     value_error = l_v(z, v)
     policy_error = l_p(pi, P)
-    total_error = reward_error + value_error + policy_error
+    total_error = reward_error
     #total_error = torch.mean((total_error/(P_imp[:,None] * N))**beta)  # Scale gradient with importance weighting
     #total_error = torch.mean((total_error / N) ** beta)  # Scale gradient without importance weighting
     return total_error.mean(), reward_error.mean(), value_error.mean(), policy_error.mean()
@@ -246,7 +246,9 @@ class model_trainer:
                                self.training_counter])
                 """
                 self.wr_Q.put(['scalar', 'oracle/r', torch.max(torch.abs(S_batch[:, -1, 0, 0, 0] - u_batch[:, 0])).detach().cpu(), self.training_counter])
-
+                self.wr_Q.put(
+                    ['scalar', 'oracle/r2', torch.max(torch.abs(S_batch[:, -1, 0, 0, 0] + 1 - u_batch[:, 1])).detach().cpu(),
+                     self.training_counter])
                 self.wr_Q.put(['dist', 'Output/v', v_batches.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Output/P', P_batches.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Output/r', r_batches.detach().cpu(), self.training_counter])
