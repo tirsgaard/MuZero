@@ -23,8 +23,8 @@ if __name__ == '__main__':
                      "gamma": 0.1}  # parameter for pUCT selection
 
     # Settings for experience replay and storing of values in general
-    experience_settings = {"history_size": 50,  # The number of sequences of frames to store in memory
-                        "sequence_length": 100,  # The number of frames in each sequence
+    experience_settings = {"history_size": 256+1,  # The number of sequences of frames to store in memory
+                        "sequence_length": 1000,  # The number of frames in each sequence
                         "n_bootstrap": 1,  # Number of steps forward to bootstrap from
                         "past_obs": 6,
                         "K": 2  # Number of steps to unroll during training. Needed here to determine delay of sending
@@ -59,7 +59,7 @@ if __name__ == '__main__':
     # Add samples to experience replay
     for i in range(N_episodes):
         # Sample epiosde length
-        episode_len = 1*256+2 #np.random.randint(1, max_episode_len)
+        episode_len = 1*256+1 #np.random.randint(1, max_episode_len)
 
         S_stack = np.random.rand(episode_len, 1, obs_size[0], obs_size[1]).astype(np.float32)
         S_stack[:, 0,  0, 0] = np.arange(episode_len)

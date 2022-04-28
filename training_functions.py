@@ -152,7 +152,7 @@ class model_trainer:
         self.f_model.to(self.device).train()
         self.g_model.to(self.device).train()
         self.h_model.to(self.device).train()
-        """
+
         for m in self.f_model.modules():
             if isinstance(m, nn.BatchNorm2d):
                 m.eval()
@@ -162,7 +162,7 @@ class model_trainer:
         for m in self.h_model.modules():
             if isinstance(m, nn.BatchNorm2d):
                 m.eval()
-        """
+
 
         length_training = self.num_epochs
         # Train
@@ -172,11 +172,11 @@ class model_trainer:
                                                                                                             self.alpha,
                                                                                                             self.K,
                                                                                                             uniform_sampling=True)
+            z_batch = u_batch.copy()
             S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp = self.convert_torch([S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp])
-            #S_batch.requires_grad_()
             # Optimize
             self.optimizer.zero_grad()
-            P_batches, v_batches, r_batches, p_vals = self.muZero(S_batch, a_batch, z_batch)
+            P_batches, v_batches, r_batches, p_vals = self.muZero.forward(S_batch, a_batch, z_batch)
             loss, r_loss, v_loss, P_loss = self.criterion(u_batch, r_batches,
                                                           z_batch, v_batches,
                                                           pi_batch, P_batches,
@@ -186,8 +186,30 @@ class model_trainer:
             self.scheduler.step(loss)
 
             #self.ER.update_weightings(p_vals[0], batch_idx)
+            # Validation check
+            if self.training_counter % 25 == 0:
+                # Get new values
+                S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, batch_idx, P_imp = self.ER.return_batches(
+                                                                                                    self.BS,
+                                                                                                    self.alpha,
+                                                                                                    self.K,
+                                                                                                    uniform_sampling=True)
+                S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp = self.convert_torch(
+                    [S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp])
+                z_batch = u_batch.clone()
+                S_val = torch.rand(S_batch.shape)
+                S_val[:, :, 0, 0] = S_batch[:, :, 0, 0]
+                P_batches, v_batches, r_batches, p_vals = self.muZero.forward(S_val, a_batch, z_batch)
+                loss, r_loss, v_loss, P_loss = self.criterion(u_batch, r_batches,
+                                                              z_batch, v_batches,
+                                                              pi_batch, P_batches,
+                                                              P_imp, self.ER.N, self.beta)
+                self.wr_Q.put(['scalar', 'Total_loss/val', loss.mean().detach().cpu(), self.training_counter])
+                self.wr_Q.put(['scalar', 'Reward_loss/val', r_loss.mean().detach().cpu(), self.training_counter])
+                self.wr_Q.put(['scalar', 'Value_loss/val', v_loss.mean().detach().cpu(), self.training_counter])
 
-            if self.training_counter == 1000:
+                self.muZero.train()
+
                 for m in self.f_model.modules():
                     if isinstance(m, nn.BatchNorm2d):
                         m.eval()
@@ -197,6 +219,9 @@ class model_trainer:
                 for m in self.h_model.modules():
                     if isinstance(m, nn.BatchNorm2d):
                         m.eval()
+
+
+            # Log summary statistics
             if self.training_counter % 100 == 1:
 
                 z_loss = 0
@@ -234,7 +259,7 @@ class model_trainer:
                 self.wr_Q.put(['scalar', 'Value_loss/train', v_loss.mean().detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Policy_loss/train', P_loss.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['scalar', 'learning_rate', self.scheduler._last_lr[0], self.training_counter])
-
+            # Log gradients
             if self.training_counter % 100 == 0:
                 # Weights
                 i = 0

@@ -71,6 +71,7 @@ class dummy_networkH(nn.Module):
         S = torch.reshape(S, (-1,) + self.output1_shape)
         return S
 
+
 class dummy_networkF(nn.Module):
     def __init__(self, input_shape, output1_shape, hidden_size):
         super(dummy_networkF, self).__init__()
@@ -100,6 +101,66 @@ class dummy_networkF(nn.Module):
         value = value
         return [policy, value]
 
+
+class identity_networkF(nn.Module):
+    def __init__(self, input_shape, output1_shape):
+        super(identity_networkF, self).__init__()
+        self.input_shape = input_shape
+        self.output1_shape = output1_shape
+        self.train_count = 0
+        # Policy head
+        self.layer1_1 = nn.Linear(np.prod(input_shape), np.prod(output1_shape))
+        # Value head
+        self.layer2_1 = nn.Linear(np.prod(input_shape), 1)
+
+    def forward(self, x):
+        x_flat = x.view((-1, ) + (np.prod(self.input_shape),) )  # Flatten
+        # Policy head
+        policy = self.layer1_1(x_flat)
+        policy = torch.reshape(policy, (-1,) + self.output1_shape)  # Residual connection
+        # Value head
+        value = self.layer2_1(x_flat)
+        return [policy, value]
+
+
+class identity_networkH(nn.Module):
+    def __init__(self, input_shape, output1_shape):
+        super(identity_networkH).__init__()
+        self.input_shape = input_shape
+        self.output1_shape = output1_shape
+        self.train_count = 0
+        self.layer1_1 = nn.Linear(np.prod(input_shape), np.prod(output1_shape))
+        self.activation1_1 = nn.ReLU()
+
+    def forward(self, x):
+        x_flat = x.view((-1, ) + (np.prod(self.input_shape),))  # Flatten
+        S = self.activation1_1(self.layer1_1(x_flat))
+        S = torch.reshape(S, (-1,) + self.output1_shape)
+        return S
+
+
+class identity_networkG(nn.Module):
+    def __init__(self, input_shape, output1_shape):
+        super().__init__()
+        self.input_shape = input_shape
+        self.output1_shape = output1_shape
+        self.train_count = 0
+
+        # Hidden state head
+        self.layer1_1 = nn.Linear(np.prod(input_shape), np.prod(output1_shape))
+        self.activation1_1 = nn.ReLU()
+        # Reward head
+        self.layer2_1 = nn.Linear(np.prod(input_shape), self.hidden_size)
+
+    def forward(self, x):
+        x_flat = x.view((-1, ) + (np.prod(self.input_shape),))  # Flatten
+        # Hidden state
+        S = self.activation1_1(self.layer1_1(x_flat))
+        S = torch.reshape(S, (-1,) + self.output1_shape)
+        # Reward state
+        reward = self.layer2_1(x_flat)
+        return [S, reward]
+
 class muZero(nn.Module):
     def __init__(self, f_model, g_model, h_model, K, hidden_S_size, action_size):
         super().__init__()
@@ -118,8 +179,8 @@ class muZero(nn.Module):
         new_S = self.h_model.forward(S[:, -1])  # Only the most recent of the unrolled observations are used
         for k in range(self.K):
             P_batch, v_batch = self.f_model.forward(new_S)
-            Sa_batch = new_S# stack_a_torch(new_S, a_batch[:, k], self.hidden_S_size, self.action_size)
-            new_S, r_batch = self.g_model.forward(Sa_batch)
+            #Sa_batch = stack_a_torch(new_S, a_batch[:, k], self.hidden_S_size, self.action_size)
+            new_S, r_batch = self.g_model.forward(new_S)
 
             p_vals.append(torch.abs(v_batch.squeeze(dim=1) - z_batch[:, k]).detach().cpu().numpy())  # For importance weighting
             P_batches.append(P_batch)
