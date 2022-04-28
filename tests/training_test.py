@@ -28,7 +28,7 @@ if __name__ == '__main__':
                         "sequence_length": 1000,  # The number of frames in each sequence
                         "n_bootstrap": 1,  # Number of steps forward to bootstrap from
                         "past_obs": 6,
-                        "K": 1  # Number of steps to unroll during training. Needed here to determine delay of sending
+                        "K": 2  # Number of steps to unroll during training. Needed here to determine delay of sending
                        }
     training_settings = {"train_batch_size": 256,  # Batch size on GPU during training
                          "num_epochs": 4*10**4,
@@ -54,7 +54,7 @@ if __name__ == '__main__':
     EX_server = experience_replay_server(ex_Q, experience_settings, MCTS_settings)
     EX_sender = experience_replay_sender(ex_Q, 1, gamma, experience_settings)
     np.random.seed(1)
-    N_episodes = 1000
+    N_episodes = 10
     max_episode_len = 100
     total_samples = 0
     # Add samples to experience replay

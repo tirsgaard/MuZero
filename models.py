@@ -176,12 +176,16 @@ class muZero(nn.Module):
         r_batches = []
         v_batches = []
         P_batches = []
+        S_inter = torch.zeros((S.shape[0], self.K, 1, 3, 3))  # For testing
+        S_inter[:, :, 0, 0, 0] = S[:, -1, 0, 0, 0][:, None]
+        for k in range(self.K):
+            S_inter[:, k, 0, 0, 0] += k
+
         new_S = self.h_model.forward(S[:, -1])  # Only the most recent of the unrolled observations are used
         for k in range(self.K):
             P_batch, v_batch = self.f_model.forward(new_S)
             #Sa_batch = stack_a_torch(new_S, a_batch[:, k], self.hidden_S_size, self.action_size)
-            new_S, r_batch = self.g_model.forward(new_S)
-
+            new_S, r_batch = self.g_model.forward(S_inter[:, k])
             p_vals.append(torch.abs(v_batch.squeeze(dim=1) - z_batch[:, k]).detach().cpu().numpy())  # For importance weighting
             P_batches.append(P_batch)
             v_batches.append(v_batch)
