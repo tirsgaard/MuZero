@@ -269,7 +269,7 @@ class model_trainer:
                 self.wr_Q.put(['dist', 'Policy_loss/train', P_loss.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['scalar', 'learning_rate', self.scheduler._last_lr[0], self.training_counter])
             # Log gradients
-            if self.training_counter % 100 == 101:
+            if self.training_counter % 100 == 1:
                 # Weights
                 i = 0
                 gradients = []
@@ -282,7 +282,7 @@ class model_trainer:
                                    self.training_counter])
                     gradients.append(torch.abs(parms.grad).mean().detach().cpu())
                     i += 1
-                mean_grad = torch.median(gradients)
+                mean_grad = torch.median(torch.tensor(gradients))
                 self.wr_Q.put(
                     ['scalar', 'median_gradient/model_f' + str(i), mean_grad, self.training_counter])
 
@@ -298,7 +298,7 @@ class model_trainer:
                         ['scalar', 'mean_gradient/model_g/layer' + str(i), torch.abs(parms.grad).mean().detach().cpu(),
                          self.training_counter])
                     i += 1
-                mean_grad = torch.median(gradients)
+                mean_grad = torch.median(torch.tensor(gradients))
                 self.wr_Q.put(['scalar', 'median_gradient/model_g' + str(i), mean_grad, self.training_counter])
 
                 i = 0
@@ -312,7 +312,7 @@ class model_trainer:
                     self.wr_Q.put(
                         ['scalar', 'mean_gradient/model_h/layer' + str(i), torch.abs(parms.grad).mean().detach().cpu(),
                          self.training_counter])
-                mean_grad = torch.median(gradients)
+                mean_grad = torch.median(torch.tensor(gradients))
                 self.wr_Q.put(['scalar', 'median_gradient/model_h' + str(i), mean_grad, self.training_counter])
                 i += 1
 
