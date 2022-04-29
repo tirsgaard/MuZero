@@ -80,7 +80,7 @@ def load_latest_model():
     return model
 
 
-def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta):
+def squared_loss(u, r, z, v, pi, P, P_imp, N, beta):
     # Loss used for the games go, chess, and shogi. This uses the 2-norm difference of values
     def l_r(u_tens, r_tens):
         assert(u_tens.shape == r_tens.shape)
@@ -95,6 +95,32 @@ def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta):
     def l_p(pi_tens, P_tens):
         assert (pi_tens.shape == P_tens.shape)
         loss = torch.sum((pi_tens-P_tens)**2, dim=2)
+        return loss
+
+    reward_error = l_r(u, r)
+    value_error = l_v(z, v)
+    policy_error = l_p(pi, P)
+    total_error = reward_error + value_error + policy_error
+    #total_error = torch.mean((total_error/(P_imp[:,None] * N))**beta)  # Scale gradient with importance weighting
+    #total_error = torch.mean((total_error / N) ** beta)  # Scale gradient without importance weighting
+    return total_error.mean(), reward_error.mean(), value_error.mean(), policy_error.mean()
+
+
+def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta):
+    # Loss used for the games go, chess, and shogi. This uses the 2-norm difference of values
+    def l_r(u_tens, r_tens):
+        assert(u_tens.shape == r_tens.shape)
+        loss = (u_tens-r_tens)**2
+        return loss
+
+    def l_v(z_tens, v_tens):
+        assert (z_tens.shape == v_tens.shape)
+        loss = (z_tens-v_tens)**2
+        return loss
+
+    def l_p(pi_tens, P_tens):
+        assert (pi_tens.shape == P_tens.shape)
+        loss = torch.sum(pi_tens*torch.log(P_tens), dim=2)
         return loss
 
     reward_error = l_r(u, r)

@@ -81,11 +81,10 @@ if __name__ == '__main__':
     loop_counter = 1
     training_counter = 0
     # Running loop
-    while True:
-        print("Beginning loop", loop_counter)
-        print("Beginning self-play")
-        # Generate new data for training
-        with torch.no_grad():
-            sim_games(env_maker, f_model, g_model, h_model, ER_Q, MCTS_settings, MuZero_settings, experience_settings)
+    print("Beginning loop", loop_counter)
+    print("Beginning self-play")
+    # Generate new data for training
+    with torch.no_grad():
+        sim_games(env_maker, f_model, g_model, h_model, ER_Q, MCTS_settings, MuZero_settings, experience_settings)
 
-        loop_counter += 1
+    loop_counter += 1
