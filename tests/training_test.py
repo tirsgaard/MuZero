@@ -86,11 +86,6 @@ if __name__ == '__main__':
     while not ex_Q.empty():
         EX_server.recv_store()
 
-
-    def gradient_clipper(model: nn.Module, val: float) -> nn.Module:
-        for parameter in model.parameters():
-            parameter.register_hook(lambda grad: grad / 2)
-        return model
     class h_resnet(nn.Module):
         def __init__(self):
             super().__init__()
@@ -155,6 +150,10 @@ if __name__ == '__main__':
     graph.theme = hl.graph.THEMES['blue'].copy()
     graph.save('rnn_hiddenlayer', format='png')
     """
+    def gradient_clipper(model: nn.Module, val: float) -> nn.Module:
+        for parameter in model.parameters():
+            parameter.register_hook(lambda grad: grad / 2)
+        return model
 
     torch.multiprocessing.set_start_method('spawn', force=True)
     wr_worker = Process(target=writer_worker, args=(Q_writer,))
@@ -164,7 +163,7 @@ if __name__ == '__main__':
     g_model = identity_networkG((1,3,3), (1,3,3))#g_resnet()  # TwoNet(5, 32, hidden_shape, 1)  # dummy_networkG((5,)+hidden_shape, (1,)+hidden_shape, 64)
     h_model = identity_networkH((1,3,3), (1,3,3))
     trainer = model_trainer(f_model, g_model, h_model, EX_server, experience_settings, training_settings, MCTS_settings)
-
+    g_model = gradient_clipper(g_model)
     # GPU things
     cuda = torch.cuda.is_available()
     device = torch.device("cuda:0" if cuda else "cpu")
