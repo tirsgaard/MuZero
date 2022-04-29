@@ -163,8 +163,6 @@ class model_trainer:
             if isinstance(m, nn.BatchNorm2d):
                 m.eval()
 
-
-
         length_training = self.num_epochs
         # Train
         for i in range(length_training):
@@ -173,9 +171,6 @@ class model_trainer:
                                                                                                             self.alpha,
                                                                                                             self.K,
                                                                                                             uniform_sampling=True)
-            for k in range(1, self.K):
-                u_batch[u_batch[:, k] == 0, k] = u_batch[u_batch[:, k] == 0, k-1] + 1
-            z_batch = u_batch.copy()
             S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp = self.convert_torch([S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp])
 
             # Optimize
@@ -186,47 +181,10 @@ class model_trainer:
                                                           pi_batch, P_batches,
                                                           P_imp, self.ER.N, self.beta)
             loss.backward()
-            print(loss)
             self.optimizer.step()
             self.scheduler.step(loss)
 
             #self.ER.update_weightings(p_vals[0], batch_idx)
-            # Validation check
-            if self.training_counter % 25 == 0:
-                # Get new values
-                S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, batch_idx, P_imp = self.ER.return_batches(
-                                                                                                    self.BS,
-                                                                                                    self.alpha,
-                                                                                                    self.K,
-                                                                                                    uniform_sampling=True)
-                S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp = self.convert_torch(
-                    [S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp])
-                for k in range(1, self.K):
-                    u_batch[u_batch[:, k] == 0, k] = u_batch[u_batch[:, k] == 0, k-1] + 1
-                z_batch = u_batch.clone()
-                S_val = torch.rand(S_batch.shape)
-                S_val[:, :, 0, 0] = S_batch[:, :, 0, 0]
-                P_batches, v_batches, r_batches, p_vals = self.muZero.forward(S_val, a_batch, z_batch)
-                loss, r_loss, v_loss, P_loss = self.criterion(u_batch, r_batches,
-                                                              z_batch, v_batches,
-                                                              pi_batch, P_batches,
-                                                              P_imp, self.ER.N, self.beta)
-                self.wr_Q.put(['scalar', 'Total_loss/val', loss.mean().detach().cpu(), self.training_counter])
-                self.wr_Q.put(['scalar', 'Reward_loss/val', r_loss.mean().detach().cpu(), self.training_counter])
-                self.wr_Q.put(['scalar', 'Value_loss/val', v_loss.mean().detach().cpu(), self.training_counter])
-
-                self.muZero.train()
-
-                for m in self.f_model.modules():
-                    if isinstance(m, nn.BatchNorm2d):
-                        m.eval()
-                for m in self.g_model.modules():
-                    if isinstance(m, nn.BatchNorm2d):
-                        m.eval()
-                for m in self.h_model.modules():
-                    if isinstance(m, nn.BatchNorm2d):
-                        m.eval()
-
 
             # Log summary statistics
             if self.training_counter % 100 == 1:
@@ -250,11 +208,12 @@ class model_trainer:
 
                 self.wr_Q.put(['scalar', 'oracle/max_v_loss', z_loss.detach().cpu(),
                                self.training_counter])
-                """
+                
                 self.wr_Q.put(['scalar', 'oracle/r', torch.max(torch.abs(S_batch[:, -1, 0, 0, 0] - u_batch[:, 0])).detach().cpu(), self.training_counter])
                 for k in range(1, self.K):
                     self.wr_Q.put(['scalar', 'oracle/r' + str(k+1), torch.max(torch.abs(S_batch[:, -1, 0, 0, 0] + k - u_batch[:, k])).detach().cpu(),
                      self.training_counter])
+                """
                 self.wr_Q.put(['dist', 'Output/v', v_batches.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Output/P', P_batches.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Output/r', r_batches.detach().cpu(), self.training_counter])

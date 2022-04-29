@@ -14,6 +14,7 @@ from torch.multiprocessing import Process, Queue, Pipe, Value, Lock, Manager, Po
 from storage_functions import experience_replay_server
 from models import dummy_networkF, dummy_networkG, dummy_networkH
 from go_model import ResNet_f, ResNet_g, ConvResNet
+from models import identity_networkH, identity_networkF, identity_networkG
 import gym
 import hyperparameters as conf
 
@@ -27,19 +28,20 @@ if __name__ == '__main__':
     MCTS_settings = conf.MCTS_settings
     training_settings = conf.training_settings
     # Construct networks
-    hidden_shape = MCTS_settings["hidden_S_size"]
+    hidden_shape = (1, ) + MCTS_settings["hidden_S_size"]
     action_size = MCTS_settings["action_size"]
     hidden_input_size = (MCTS_settings["action_size"][0] + 1,) + MCTS_settings["hidden_S_size"]
+    """
     f_model = dummy_networkF(hidden_shape, action_size,
                              32)  # Model for predicting value (v) and policy (p)
     g_model = dummy_networkG(hidden_input_size, (1,) + hidden_shape, 32)  # Model for predicting hidden state (S)
     h_model = dummy_networkH((experience_settings["past_obs"],) + MCTS_settings["observation_size"], hidden_shape,
                              32)  # Model for converting environment state to hidden state
+    """
 
-    h_model = ConvResNet(experience_settings["past_obs"], MCTS_settings["hidden_S_channel"], hidden_shape)
-    g_model = ResNet_g(MCTS_settings["hidden_S_channel"]+action_size[0], 32, hidden_shape, MCTS_settings["hidden_S_channel"], 128)
-
-    f_model = ResNet_f(MCTS_settings["hidden_S_channel"], 32, 4, action_size, 128)
+    h_model = identity_networkH((1, 2, 2), hidden_shape)  # ConvResNet(experience_settings["past_obs"], MCTS_settings["hidden_S_channel"], hidden_shape)
+    g_model = identity_networkG(hidden_input_size, hidden_shape)  # ResNet_g(MCTS_settings["hidden_S_channel"]+action_size[0], 32, hidden_shape, MCTS_settings["hidden_S_channel"], 128)
+    f_model = identity_networkF(hidden_shape, action_size)  # ResNet_f(MCTS_settings["hidden_S_channel"], 32, 4, action_size, 128)
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 

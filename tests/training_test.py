@@ -31,7 +31,7 @@ if __name__ == '__main__':
                         "K": 3  # Number of steps to unroll during training. Needed here to determine delay of sending
                        }
     training_settings = {"train_batch_size": 256,  # Batch size on GPU during training
-                         "num_epochs": 4*10**4,
+                         "num_epochs": 1000,
                          "alpha": 1,
                          "beta": 1,
                          "lr_init": 1.*10**-8,  # Original Atari rate was 0.05
@@ -39,6 +39,7 @@ if __name__ == '__main__':
                          "lr_decay_steps": 10000,  # Original Atari was 350e3
                          "momentum": 0.9  # Original was 0.9
                          }
+    torch.manual_seed(0)
     Q_writer = Queue()
     training_settings["Q_writer"] = Q_writer
     experience_settings["Q_writer"] = Q_writer
@@ -152,16 +153,16 @@ if __name__ == '__main__':
     """
     def gradient_clipper(model: nn.Module) -> nn.Module:
         for parameter in model.parameters():
-            parameter.register_hook(lambda grad: grad / 2)
+            parameter.register_hook(lambda grad: grad * 0)
         return model
 
     torch.multiprocessing.set_start_method('spawn', force=True)
     wr_worker = Process(target=writer_worker, args=(Q_writer,))
     wr_worker.start()
 
-    f_model = identity_networkF((1,3,3), (4,)) # dummy_networkF(hidden_shape, action_size, 4)
-    g_model = identity_networkG((1,3,3), (1,3,3))#g_resnet()  # TwoNet(5, 32, hidden_shape, 1)  # dummy_networkG((5,)+hidden_shape, (1,)+hidden_shape, 64)
-    h_model = identity_networkH((1,3,3), (1,3,3))
+    f_model = f_resnet() #  identity_networkF((1,3,3), (4,))
+    g_model = g_resnet() #  identity_networkG((1,3,3), (1,3,3))# TwoNet(5, 32, hidden_shape, 1)  # dummy_networkG((5,)+hidden_shape, (1,)+hidden_shape, 64)
+    h_model = h_resnet() # identity_networkH((1,3,3), (1,3,3))
     trainer = model_trainer(f_model, g_model, h_model, EX_server, experience_settings, training_settings, MCTS_settings)
     g_model = gradient_clipper(g_model)
     # GPU things
