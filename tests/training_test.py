@@ -150,7 +150,7 @@ if __name__ == '__main__':
     graph.theme = hl.graph.THEMES['blue'].copy()
     graph.save('rnn_hiddenlayer', format='png')
     """
-    def gradient_clipper(model: nn.Module, val: float) -> nn.Module:
+    def gradient_clipper(model: nn.Module) -> nn.Module:
         for parameter in model.parameters():
             parameter.register_hook(lambda grad: grad / 2)
         return model
