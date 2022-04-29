@@ -34,7 +34,7 @@ if __name__ == '__main__':
 
     f_model = dummy_networkF(hidden_shape, action_size,
                              32)  # Model for predicting value (v) and policy (p)
-    g_model = dummy_networkG(hidden_input_size, (1,) + hidden_shape, 32)  # Model for predicting hidden state (S)
+    g_model = dummy_networkG(hidden_input_size, hidden_shape, 32)  # Model for predicting hidden state (S)
     h_model = dummy_networkH((experience_settings["past_obs"],) + MCTS_settings["observation_size"], hidden_shape,
                              32)  # Model for converting environment state to hidden state
 
