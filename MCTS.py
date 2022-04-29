@@ -124,9 +124,9 @@ def select_node(root_node, normalizer, leaf_number, MCTS_settings):
     current_path = deque([])
     current_node = root_node
     while True:  # Continue to traverse tree until new edge is found
-        temp = c1+np.log((current_node.N_total+c2+1)/c2)
+        temp = c1+np.log((current_node.N_total+c2)/c2)  # +1 is removed as as root node counts itself
         # Choose action
-        current_node.U = current_node.P * np.sqrt(current_node.N_total)*temp/(1+current_node.N)
+        current_node.U = current_node.P * np.sqrt(current_node.N_total - 1)*temp/(1+current_node.N)  # -1 because of root node
         Q_normed = normalizer.norm(current_node.Q)
         a_chosen = np.argmax(Q_normed + current_node.U + current_node.illegal_actions)
 
