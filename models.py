@@ -112,12 +112,14 @@ class identity_networkF(nn.Module):
         self.layer1_1 = nn.Linear(np.prod(input_shape), np.prod(output1_shape))
         # Value head
         self.layer2_1 = nn.Linear(np.prod(input_shape), 1)
+        self.softmaxer = torch.nn.Softmax(dim=3)
 
     def forward(self, x):
         x_flat = x.view((-1, ) + (np.prod(self.input_shape),) )  # Flatten
         # Policy head
         policy = self.layer1_1(x_flat)
         policy = torch.reshape(policy, (-1,) + self.output1_shape)  # Residual connection
+        policy = self.softmaxer(policy)  # Normaliser
         # Value head
         value = self.layer2_1(x_flat)
         return [policy, value]

@@ -225,7 +225,8 @@ class model_trainer:
                 self.wr_Q.put(['scalar', 'Total_loss/train', loss.mean().detach().cpu(), self.training_counter])
                 self.wr_Q.put(['scalar', 'Reward_loss/train', r_loss.mean().detach().cpu(), self.training_counter])
                 self.wr_Q.put(['scalar', 'Value_loss/train', v_loss.mean().detach().cpu(), self.training_counter])
-                self.wr_Q.put(['dist', 'Policy_loss/train', P_loss.detach().cpu(), self.training_counter])
+                self.wr_Q.put(['scalar', 'Policy_loss/train', P_loss.mean().detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'Policy_loss_dist/train', P_loss.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['scalar', 'learning_rate', self.scheduler._last_lr[0], self.training_counter])
             # Log gradients
             if self.training_counter % 100 == 1:
