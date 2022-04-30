@@ -14,7 +14,7 @@ from torch.multiprocessing import Process, Queue, Pipe, Value, Lock, Manager, Po
 from storage_functions import experience_replay_server
 from models import dummy_networkF, dummy_networkG, dummy_networkH
 from go_model import ResNet_f, ResNet_g, ConvResNet
-from models import identity_networkH, identity_networkF, identity_networkG
+from models import identity_networkH, identity_networkF, identity_networkG, constant_networkF
 import gym
 import hyperparameters as conf
 
