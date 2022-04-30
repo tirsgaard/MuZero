@@ -80,7 +80,7 @@ def load_latest_model():
     return model
 
 
-def squared_loss(u, r, z, v, pi, P, P_imp, N, beta):
+def squared_loss(u, r, z, v, pi, P, P_imp, N, beta, mean=True):
     # Loss used for the games go, chess, and shogi. This uses the 2-norm difference of values
     def l_r(u_tens, r_tens):
         assert(u_tens.shape == r_tens.shape)
@@ -103,7 +103,10 @@ def squared_loss(u, r, z, v, pi, P, P_imp, N, beta):
     total_error = reward_error + value_error + policy_error
     #total_error = torch.mean((total_error/(P_imp[:,None] * N))**beta)  # Scale gradient with importance weighting
     #total_error = torch.mean((total_error / N) ** beta)  # Scale gradient without importance weighting
-    return total_error.mean(), reward_error.mean(), value_error.mean(), policy_error.mean()
+    if mean:
+        return total_error.mean(), reward_error.mean(), value_error.mean(), policy_error.mean()
+    else:
+        return total_error, reward_error, value_error, policy_error
 
 
 def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta, mean=True):
@@ -138,7 +141,7 @@ def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta, mean=True):
 class model_trainer:
     def __init__(self, f_model, g_model, h_model, experience_replay, experience_settings, training_settings, MCTS_settings):
         self.MCTS_settings = MCTS_settings
-        self.criterion = muZero_games_loss
+        self.criterion = squared_loss
         self.ER = experience_replay
         self.experience_settings = experience_settings
         self.K = experience_settings["K"]

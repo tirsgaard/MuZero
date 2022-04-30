@@ -61,7 +61,18 @@ if __name__ == '__main__':
     h_model.share_memory()
 
     # Function for creating environment. Needs to create seperate env for each worker
-    env_maker = lambda: gym.make("CartPole-v1")
+    class RewardWrapper(gym.RewardWrapper):
+        def __init__(self, env):
+            super().__init__(env)
+            self.iters = 0
+
+        def reward(self, rew):
+            # modify rew
+            rew = rew * (self.iters % 2)
+            self.iters += 1
+            return rew
+
+    env_maker = lambda: RewardWrapper(gym.make("CartPole-v1"))
 
     # Construct model trainer and experience storage
     torch.multiprocessing.set_start_method('spawn', force=True)
