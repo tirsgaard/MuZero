@@ -33,10 +33,10 @@ if __name__ == '__main__':
     hidden_input_size = (MCTS_settings["action_size"][0] + 1,) + MCTS_settings["hidden_S_size"]
 
     f_model = dummy_networkF(hidden_shape, action_size,
-                             32)  # Model for predicting value (v) and policy (p)
-    g_model = dummy_networkG(hidden_input_size, hidden_shape, 32)  # Model for predicting hidden state (S)
+                             1024)  # Model for predicting value (v) and policy (p)
+    g_model = dummy_networkG(hidden_input_size, hidden_shape, 1024)  # Model for predicting hidden state (S)
     h_model = dummy_networkH((experience_settings["past_obs"],) + MCTS_settings["observation_size"], hidden_shape,
-                             32)  # Model for converting environment state to hidden state
+                             1024)  # Model for converting environment state to hidden state
 
 
     #h_model = ConvResNet(experience_settings["past_obs"], MCTS_settings["hidden_S_channel"], hidden_shape)  # identity_networkH((1, 2, 2), hidden_shape)
