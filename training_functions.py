@@ -337,18 +337,52 @@ def train_ex_worker(ex_Q, f_model, g_model, h_model, experience_settings, traini
         # Train
         trainer.train()
 
-def writer_worker(wr_Q):
+
+class fix_out_of_order:
+    # Because Tensorboard for some reason connects datapoints based on time added and not x-axis values,
+    #  this function sorts them....
+    def __init__(self, name_list, writer):
+        self.name_list = name_list
+        self.writer = writer
+        self.buffers = [[] for i in range(len(name_list))]
+        self.name2idx = {}
+        self.current_idx = np.zeros((len(name_list),))
+        self.dicts = [{} for i in range(len(name_list))]
+        for i in range(len(name_list)):
+            self.name2idx[name_list[i]] = i
+
+    def update(self, type, name, value, index):
+        if name in self.name_list:
+            name_idx = self.dict[name]
+            self.dicts[name_idx][index] = [type, name, value, index]
+
+            while self.current_idx[name_idx] in self.dicts[name_idx]:
+                # Add next number if exists
+                type, name, value, index = self.dicts[name_idx].pop(self.current_idx[name_idx])
+                write_point(self.writer, name, value, index)
+                self.current_idx[name_idx] += 1
+        else:
+            write_point(self.writer, name, value, index)
+
+
+def write_point(writer, name, value, index):
+    if type == 'scalar':
+        writer.add_scalar(name, value, index)
+    elif type == 'dist':
+        writer.add_histogram(name, value, index)
+    else:
+        print("Writer error")
+        raise TypeError
+
+
+def writer_worker(wr_Q, type, name, value, index):
     writer = SummaryWriter()
+    name_list = ["environment/steps", "environment/total_reward"]
+    updater = fix_out_of_order(name_list, writer)
     while True:
         # Empty queue
         while not wr_Q.empty():
             type, name, value, index = wr_Q.get()
-            if type == 'scalar':
-                writer.add_scalar(name, value, index)
-            elif type == 'dist':
-                writer.add_histogram(name, value, index)
-            else:
-                print("Writer error")
-                raise TypeError
+            updater.update(name, value, index)
 
         time.sleep(1)
