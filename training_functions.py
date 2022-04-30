@@ -106,7 +106,7 @@ def squared_loss(u, r, z, v, pi, P, P_imp, N, beta):
     return total_error.mean(), reward_error.mean(), value_error.mean(), policy_error.mean()
 
 
-def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta):
+def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta, mean=True):
     # Loss used for the games go, chess, and shogi. This uses the 2-norm difference of values
     def l_r(u_tens, r_tens):
         assert(u_tens.shape == r_tens.shape)
@@ -129,7 +129,10 @@ def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta):
     total_error = reward_error + value_error + policy_error
     #total_error = torch.mean((total_error/(P_imp[:,None] * N))**beta)  # Scale gradient with importance weighting
     #total_error = torch.mean((total_error / N) ** beta)  # Scale gradient without importance weighting
-    return total_error.mean(), reward_error.mean(), value_error.mean(), policy_error.mean()
+    if mean:
+        return total_error.mean(), reward_error.mean(), value_error.mean(), policy_error.mean()
+    else:
+        return total_error, reward_error, value_error, policy_error
 
 
 class model_trainer:
@@ -161,9 +164,9 @@ class model_trainer:
         self.g_model = g_model
         self.h_model = h_model
         self.muZero = muZero(self.f_model, self.g_model, self.h_model, self.K, self.hidden_S_size, self.action_size)
-        model_list = list(self.f_model.parameters()) + list(self.h_model.parameters()) + list(self.g_model.parameters())
-        #self.optimizer = optim.SGD(model_list, lr=self.lr_init, momentum=self.momentum)
-        self.optimizer = optim.SGD(self.muZero.parameters(), lr=self.lr_init, momentum=self.momentum)
+        #self.optimizer = optim.SGD(self.muZero.parameters(), lr=self.lr_init, momentum=self.momentum)
+        self.optimizer = optim.Adam(self.muZero.parameters(), lr=self.lr_init)
+
         gamma = self.lr_decay_rate ** (1 / self.lr_decay_steps)
         #self.scheduler = StepLR(self.optimizer, step_size=1, gamma=gamma)
         self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', verbose=True, patience=0, eps=1)
@@ -178,16 +181,6 @@ class model_trainer:
         self.f_model.to(self.device).train()
         self.g_model.to(self.device).train()
         self.h_model.to(self.device).train()
-
-        for m in self.f_model.modules():
-            if isinstance(m, nn.BatchNorm2d):
-                m.eval()
-        for m in self.g_model.modules():
-            if isinstance(m, nn.BatchNorm2d):
-                m.eval()
-        for m in self.h_model.modules():
-            if isinstance(m, nn.BatchNorm2d):
-                m.eval()
 
         length_training = self.num_epochs
         # Train
@@ -240,6 +233,7 @@ class model_trainer:
                     self.wr_Q.put(['scalar', 'oracle/r' + str(k+1), torch.max(torch.abs(S_batch[:, -1, 0, 0, 0] + k - u_batch[:, k])).detach().cpu(),
                      self.training_counter])
                 """
+                # Log summary statistics
                 self.wr_Q.put(['dist', 'Output/v', v_batches.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Output/P', P_batches.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Output/r', r_batches.detach().cpu(), self.training_counter])
@@ -254,8 +248,30 @@ class model_trainer:
                 self.wr_Q.put(['scalar', 'Policy_loss/train', P_loss.mean().detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Policy_loss_dist/train', P_loss.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['scalar', 'learning_rate', self.scheduler._last_lr[0], self.training_counter])
-            # Log gradients
-            if self.training_counter % 100 == 1:
+
+                # Check accuracy change over unrolls
+                loss, r_loss, v_loss, P_loss = self.criterion(u_batch, r_batches,
+                                                              z_batch, v_batches,
+                                                              pi_batch, P_batches,
+                                                              P_imp, self.ER.N, self.beta,  mean=False)
+                loss_median, _ = loss.median(dim=0)
+                r_loss_median, _ = r_loss.median(dim=0)
+                v_loss_median, _ = v_loss.median(dim=0)
+                P_loss_median, _ = P_loss.median(dim=0)
+                for k in range(1, self.K):
+                    self.wr_Q.put(['scalar', 'unrolling_errors/loss' + str(k + 1),
+                                   (loss_median[k]/loss_median[0]).detach().cpu(),
+                                   self.training_counter])
+                    self.wr_Q.put(['scalar', 'unrolling_errors/r_loss' + str(k + 1),
+                                   (r_loss_median[k] / r_loss_median[0]).detach().cpu(),
+                                   self.training_counter])
+                    self.wr_Q.put(['scalar', 'unrolling_errors/v_loss' + str(k + 1),
+                                   (v_loss_median[k] / v_loss_median[0]).detach().cpu(),
+                                   self.training_counter])
+                    self.wr_Q.put(['scalar', 'unrolling_errors/P_loss' + str(k + 1),
+                                   (P_loss_median[k] / P_loss_median[0]).detach().cpu(),
+                                   self.training_counter])
+                # Log gradients
                 # Weights
                 i = 0
                 gradients = []
@@ -300,10 +316,9 @@ class model_trainer:
                         ['scalar', 'mean_gradient/model_h/layer' + str(i), torch.abs(parms.grad).mean().detach().cpu(),
                          self.training_counter])
                     gradients.append(torch.abs(parms.grad).mean().detach().cpu())
+                    i += 1
                 mean_grad = torch.median(torch.tensor(gradients))
                 self.wr_Q.put(['scalar', 'median_gradient/model_h', mean_grad.detach().cpu(), self.training_counter])
-                i += 1
-
 
             self.training_counter += 1
 
