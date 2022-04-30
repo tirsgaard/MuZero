@@ -46,6 +46,10 @@ class dummy_networkG(nn.Module):
         S = self.activation1_1(self.layer1_1(x_flat))
         S = self.activation1_2(self.layer1_2(S))
         S = torch.reshape(S, (-1,) + self.output1_shape)
+        # Add skip connection
+        S = S + x[:, 0, None]
+
+
         # Reward state
         reward = self.activation2_1(self.layer2_1(x_flat))
         reward = self.layer2_2(reward)
@@ -159,6 +163,7 @@ class identity_networkG(nn.Module):
         # Hidden state
         S = self.activation1_1(self.layer1_1(x_flat))
         S = torch.reshape(S, (-1,) + self.output1_shape)
+
         # Reward state
         reward = self.layer2_1(x_flat)
         return [S, reward]

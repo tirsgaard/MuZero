@@ -31,7 +31,7 @@ MCTS_settings = {"n_parallel_explorations": 1,  # Number of pseudo-parrallel run
 
 training_settings = {"train_batch_size": 32,  # Batch size on GPU during training
                      "num_epochs": 100,  # Maximum length of training epoch before break
-                     "lr_init": (10**-2)*10**3,  # Original Atari rate was 0.05
+                     "lr_init": (10**-3),  # Original Atari rate was 0.05
                      "lr_decay_rate": 0.1,
                      "lr_decay_steps": 400e3,  # Original Atari was 350e3
                      "alpha": 1,
