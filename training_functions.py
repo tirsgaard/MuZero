@@ -353,19 +353,19 @@ class fix_out_of_order:
 
     def update(self, type, name, value, index):
         if name in self.name_list:
-            name_idx = self.dict[name]
+            name_idx = self.name2idx[name]
             self.dicts[name_idx][index] = [type, name, value, index]
 
             while self.current_idx[name_idx] in self.dicts[name_idx]:
                 # Add next number if exists
                 type, name, value, index = self.dicts[name_idx].pop(self.current_idx[name_idx])
-                write_point(self.writer, name, value, index)
+                write_point(self.writer, type, name, value, index)
                 self.current_idx[name_idx] += 1
         else:
-            write_point(self.writer, name, value, index)
+            write_point(self.writer, type, name, value, index)
 
 
-def write_point(writer, name, value, index):
+def write_point(writer, type, name, value, index):
     if type == 'scalar':
         writer.add_scalar(name, value, index)
     elif type == 'dist':
@@ -375,7 +375,7 @@ def write_point(writer, name, value, index):
         raise TypeError
 
 
-def writer_worker(wr_Q, type, name, value, index):
+def writer_worker(wr_Q):
     writer = SummaryWriter()
     name_list = ["environment/steps", "environment/total_reward"]
     updater = fix_out_of_order(name_list, writer)
@@ -383,6 +383,6 @@ def writer_worker(wr_Q, type, name, value, index):
         # Empty queue
         while not wr_Q.empty():
             type, name, value, index = wr_Q.get()
-            updater.update(name, value, index)
+            updater.update(type, name, value, index)
 
         time.sleep(1)
