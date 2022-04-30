@@ -105,6 +105,31 @@ class dummy_networkF(nn.Module):
         value = value
         return [policy, value]
 
+class constant_networkF(nn.Module):
+    def __init__(self, input_shape, output1_shape, hidden_size):
+        super(dummy_networkF, self).__init__()
+        self.input_shape = input_shape
+        self.output1_shape = output1_shape
+        self.hidden_size = hidden_size
+        self.train_count = 0
+        # Policy head
+        self.layer1_1 = torch.ones(output1_shape) / np.prod(output1_shape)
+        # Value head
+        self.layer2_1 = nn.Linear(np.prod(input_shape), self.hidden_size)
+        self.activation2_1 = nn.ReLU()
+        self.layer2_2 = nn.Linear(self.hidden_size, 1)
+
+    def forward(self, x):
+        x_flat = x.view((-1, ) + (np.prod(self.input_shape),) )  # Flatten
+        # Policy head
+        policy = self.layer1_1
+        policy = torch.reshape(policy, (-1,) + self.output1_shape)  # Residual connection
+        # Value head
+        value = self.activation2_1(self.layer2_1(x_flat))
+        value = self.layer2_2(value)
+        value = value
+        return [policy, value]
+
 
 class identity_networkF(nn.Module):
     def __init__(self, input_shape, output1_shape):
