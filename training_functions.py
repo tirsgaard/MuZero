@@ -101,7 +101,7 @@ def squared_loss(u, r, z, v, pi, P, P_imp, N, beta, mean=True):
     value_error = l_v(z, v)
     policy_error = l_p(pi, P)
     total_error = reward_error + value_error + policy_error
-    #total_error = torch.mean((total_error/(P_imp[:,None] * N))**beta)  # Scale gradient with importance weighting
+    total_error = torch.mean((total_error/(P_imp[:,None] * N))**beta)  # Scale gradient with importance weighting
     #total_error = torch.mean((total_error / N) ** beta)  # Scale gradient without importance weighting
     if mean:
         return total_error.mean(), reward_error.mean(), value_error.mean(), policy_error.mean()
