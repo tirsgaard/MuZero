@@ -86,6 +86,7 @@ class experience_replay_server:
         # But NOTE samples with error = 0 will still not be sampled
         if uniform_sampling:
             non_zero = self.P != 0
+            N_count = np.sum(non_zero)  # This is also needed
             P_temp2 = self.P[non_zero] > 0
             P_sum = np.sum(P_temp2)
             P_temp2 = P_temp2 / P_sum
@@ -95,12 +96,14 @@ class experience_replay_server:
             # Normalize priority dist
             if alpha != 1:
                 non_zero = self.P != 0
+                N_count = np.sum(non_zero)  # This is also needed
                 P_temp2 = self.P[non_zero] ** -alpha
                 P_sum = np.sum(P_temp2)
                 P_temp2 = P_temp2 / P_sum
                 P_temp = self.P.copy()
                 P_temp[non_zero] = P_temp2
             else:
+                N_count = np.sum(self.P!=0)  # This is also needed
                 P_sum = np.sum(self.P)
                 P_temp = self.P / P_sum
 
@@ -138,7 +141,7 @@ class experience_replay_server:
         done_batch = np.stack(done_batch)
         pi_batch = np.stack(pi_batch)
         z_batch = np.stack(z_batch)
-        return S_batch, a_batch, r_batch, done_batch, pi_batch, z_batch, batch_idx, self.P[batch_idx]/P_sum
+        return S_batch, a_batch, r_batch, done_batch, pi_batch, z_batch, batch_idx, self.P[batch_idx]/P_sum, int(N_count)
 
     def update_weightings(self, new_weightings, indexes):
         self.P[indexes] = new_weightings

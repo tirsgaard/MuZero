@@ -130,7 +130,7 @@ def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta, mean=True):
     value_error = l_v(z, v)
     policy_error = l_p(pi, P)
     total_error = reward_error + value_error + policy_error
-    #total_error = torch.mean((total_error/(P_imp[:,None] * N))**beta)  # Scale gradient with importance weighting
+    total_error = torch.mean((total_error/(P_imp[:,None] * N))**beta)  # Scale gradient with importance weighting
     #total_error = torch.mean((total_error / N) ** beta)  # Scale gradient without importance weighting
     if mean:
         return total_error.mean(), reward_error.mean(), value_error.mean(), policy_error.mean()
@@ -190,7 +190,7 @@ class model_trainer:
         # Train
         for i in range(length_training):
             # Generate batch. Note we uniform sample instead of epoch as in the original paper
-            S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, batch_idx, P_imp = self.ER.return_batches(self.BS,
+            S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, batch_idx, P_imp, N_count = self.ER.return_batches(self.BS,
                                                                                                             self.alpha,
                                                                                                             self.K,
                                                                                                             uniform_sampling=True)
@@ -202,7 +202,7 @@ class model_trainer:
             loss, r_loss, v_loss, P_loss = self.criterion(u_batch, r_batches,
                                                           z_batch, v_batches,
                                                           pi_batch, P_batches,
-                                                          P_imp, self.ER.N, self.beta)
+                                                          P_imp, N_count, self.beta)
             loss.backward()
             self.optimizer.step()
             self.scheduler.step(loss)
