@@ -186,6 +186,7 @@ class model_trainer:
         self.h_model.to(self.device).train()
 
         length_training = self.num_epochs
+        start_time = time.time()
         # Train
         for i in range(length_training):
             # Generate batch. Note we uniform sample instead of epoch as in the original paper
@@ -324,6 +325,9 @@ class model_trainer:
                 self.wr_Q.put(['scalar', 'median_gradient/model_h', mean_grad.detach().cpu(), self.training_counter])
 
             self.training_counter += 1
+        end_time = time.time()
+        speed = length_training / (end_time - start_time)
+        self.wr_Q.put(['scalar', 'Other/iterations_pr_sec', speed, self.training_counter])
 
 
 
@@ -346,7 +350,7 @@ class fix_out_of_order:
         self.writer = writer
         self.buffers = [[] for i in range(len(name_list))]
         self.name2idx = {}
-        self.current_idx = np.zeros((len(name_list),))
+        self.current_idx = np.ones((len(name_list),))
         self.dicts = [{} for i in range(len(name_list))]
         for i in range(len(name_list)):
             self.name2idx[name_list[i]] = i
