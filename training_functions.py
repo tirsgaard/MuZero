@@ -207,7 +207,7 @@ class model_trainer:
             self.optimizer.step()
             self.scheduler.step(loss)
 
-            #self.ER.update_weightings(p_vals[0], batch_idx)
+            self.ER.update_weightings(p_vals[0], batch_idx)
 
             # Log summary statistics
             if self.training_counter % 100 == 1:
