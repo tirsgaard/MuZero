@@ -221,6 +221,7 @@ class muZero(nn.Module):
         P_batches = torch.stack(P_batches, dim=1)
         v_batches = torch.stack(v_batches, dim=1).squeeze(dim=2)
         r_batches = torch.stack(r_batches, dim=1).squeeze(dim=2)
+        p_vals = np.stack(p_vals, axis=1)
 
         return P_batches, v_batches, r_batches, p_vals
 

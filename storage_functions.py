@@ -103,7 +103,7 @@ class experience_replay_server:
                 P_temp = self.P.copy()
                 P_temp[non_zero] = P_temp2
             else:
-                N_count = np.sum(self.P!=0)  # This is also needed
+                N_count = np.sum(self.P != 0)  # This is also needed
                 P_sum = np.sum(self.P)
                 P_temp = self.P / P_sum
 

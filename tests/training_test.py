@@ -160,9 +160,9 @@ if __name__ == '__main__':
     wr_worker = Process(target=writer_worker, args=(Q_writer,))
     wr_worker.start()
 
-    f_model = f_resnet() #  identity_networkF((1,3,3), (4,))
-    g_model = g_resnet() #  identity_networkG((1,3,3), (1,3,3))# TwoNet(5, 32, hidden_shape, 1)  # dummy_networkG((5,)+hidden_shape, (1,)+hidden_shape, 64)
-    h_model = h_resnet() # identity_networkH((1,3,3), (1,3,3))
+    f_model = identity_networkF((1,3,3), (4,)) # f_resnet()
+    g_model = identity_networkG((5,3,3), (1,3,3)) #  g_resnet() # TwoNet(5, 32, hidden_shape, 1)  # dummy_networkG((5,)+hidden_shape, (1,)+hidden_shape, 64)
+    h_model = identity_networkH((1,3,3), (1,3,3)) #  h_resnet() # identity_networkH((1,3,3), (1,3,3))
     trainer = model_trainer(f_model, g_model, h_model, EX_server, experience_settings, training_settings, MCTS_settings)
     g_model = gradient_clipper(g_model)
     # GPU things
