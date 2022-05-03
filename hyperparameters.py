@@ -41,4 +41,5 @@ training_settings = {"train_batch_size": 32,  # Batch size on GPU during trainin
                      "beta": 1,
                      "momentum": 0.9,  # Original was 0.9
                      "weight_decay": 1e-4,  # Original was 1-e4
+                     "uniform_sampling": False,
                      }

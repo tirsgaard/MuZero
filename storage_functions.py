@@ -8,6 +8,7 @@ class experience_replay_server:
         self.K = experience_settings["K"]  # Number of steps to unroll during training. Needed here to determine delay of sending
         self.ex_Q = ex_Q  # For receiving jobs
         self.action_size = MCTS_settings["action_size"]
+        self.n_actions = np.prod(self.action_size)
         self.obs_size = MCTS_settings["observation_size"]
         self.past_obs = experience_settings["past_obs"]  # Number of past observations to stack
 
@@ -87,7 +88,7 @@ class experience_replay_server:
         if uniform_sampling:
             non_zero = self.P != 0
             N_count = np.sum(non_zero)  # This is also needed
-            P_temp2 = self.P[non_zero] > 0
+            P_temp2 = self.P[non_zero] > 0  # Binarize
             P_sum = np.sum(P_temp2)
             P_temp2 = P_temp2 / P_sum
             P_temp = self.P.copy()
@@ -122,7 +123,7 @@ class experience_replay_server:
             pad_length = self.K - len(z)
             # Pad samples if a value after termination extends into K length
             if pad_length != 0:
-                a = np.pad(a, (0, pad_length), mode='constant', constant_values=0)
+                a = np.pad(a, (0, pad_length), mode='constant', constant_values=np.random.randint(0, self.n_actions))
                 r = np.pad(r, (0, pad_length), mode='constant', constant_values=0)
                 done = np.pad(done, (0, pad_length), mode='constant', constant_values=1)
                 pi = np.pad(pi, ((0, pad_length), (0, 0)), mode='constant', constant_values=1/len(pi))  # Assume equal taken action

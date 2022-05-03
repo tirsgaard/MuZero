@@ -154,6 +154,7 @@ class model_trainer:
         self.lr_decay_steps = training_settings["lr_decay_steps"]
         self.momentum = training_settings["momentum"]
         self.weight_decay = training_settings["weight_decay"]
+        self.uniform_sampling = training_settings["uniform_sampling"]
         self.hidden_S_size = MCTS_settings["hidden_S_size"]
         self.action_size = MCTS_settings["action_size"]
         self.wr_Q = MCTS_settings["Q_writer"]
@@ -194,7 +195,7 @@ class model_trainer:
             S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, batch_idx, P_imp, N_count = self.ER.return_batches(self.BS,
                                                                                                             self.alpha,
                                                                                                             self.K,
-                                                                                                            uniform_sampling=True)
+                                                                                                            uniform_sampling=self.uniform_sampling)
             S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp = self.convert_torch([S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp])
 
             # Optimize
