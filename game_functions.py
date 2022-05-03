@@ -158,6 +158,7 @@ def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZe
             if MuZero_settings["save_image"]:
                 env_image = env.render(mode="rgb_array")
                 plt.imsave('MCT_graphs/' + str(game_id) + '_env_image' + '.jpeg', env_image)
+        verify_nodes(root_node, MCTS_settings)
 
         # Compute action distribution from policy
         pi_legal = root_node.N / (root_node.N_total - 1)  # -1 to not count exploration of the root-node itself

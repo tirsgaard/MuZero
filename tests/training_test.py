@@ -37,9 +37,11 @@ if __name__ == '__main__':
                          "lr_init": 1.*10**-8,  # Original Atari rate was 0.05
                          "lr_decay_rate": 0.5, # Original Atari rate was 0.1
                          "lr_decay_steps": 10000,  # Original Atari was 350e3
-                         "momentum": 0.9  # Original was 0.9
+                         "momentum": 0.9,  # Original was 0.9
+                         "weight_decay": 1e-4
                          }
     torch.manual_seed(0)
+    np.random.seed(1)
     Q_writer = Queue()
     training_settings["Q_writer"] = Q_writer
     experience_settings["Q_writer"] = Q_writer
@@ -54,7 +56,7 @@ if __name__ == '__main__':
     ex_Q = Queue()
     EX_server = experience_replay_server(ex_Q, experience_settings, MCTS_settings)
     EX_sender = experience_replay_sender(ex_Q, 1, gamma, experience_settings)
-    np.random.seed(1)
+
     N_episodes = 10
     max_episode_len = 100
     total_samples = 0
@@ -69,7 +71,7 @@ if __name__ == '__main__':
         #    for jj in range(obs_size[1]):
         #        S_stack[:, ii, jj] = np.arange(episode_len)
 
-        a_stack = np.zeros((episode_len))
+        a_stack = np.random.randint(0,np.prod(action_size), episode_len)
         r_stack = np.arange(episode_len, dtype=np.float64)  # np.ones((episode_len,))#
         v_stack = np.arange(episode_len, dtype=np.float64)
         done_stack = np.zeros((episode_len,))

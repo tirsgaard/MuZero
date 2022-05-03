@@ -153,6 +153,7 @@ class model_trainer:
         self.lr_decay_rate = training_settings["lr_decay_rate"]
         self.lr_decay_steps = training_settings["lr_decay_steps"]
         self.momentum = training_settings["momentum"]
+        self.weight_decay = training_settings["weight_decay"]
         self.hidden_S_size = MCTS_settings["hidden_S_size"]
         self.action_size = MCTS_settings["action_size"]
         self.wr_Q = MCTS_settings["Q_writer"]
@@ -167,8 +168,8 @@ class model_trainer:
         self.g_model = g_model
         self.h_model = h_model
         self.muZero = muZero(self.f_model, self.g_model, self.h_model, self.K, self.hidden_S_size, self.action_size)
-        #self.optimizer = optim.SGD(self.muZero.parameters(), lr=self.lr_init, momentum=self.momentum)
-        self.optimizer = optim.Adam(self.muZero.parameters(), lr=self.lr_init)
+        #self.optimizer = optim.SGD(self.muZero.parameters(), lr=self.lr_init, momentum=self.momentum, weight_decay=self.weight_decay)
+        self.optimizer = optim.Adam(self.muZero.parameters(), lr=self.lr_init, weight_decay=self.weight_decay)
 
         gamma = self.lr_decay_rate ** (1 / self.lr_decay_steps)
         #self.scheduler = StepLR(self.optimizer, step_size=1, gamma=gamma)
@@ -252,6 +253,10 @@ class model_trainer:
                 self.wr_Q.put(['scalar', 'Policy_loss/train', P_loss.mean().detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Policy_loss_dist/train', P_loss.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['scalar', 'learning_rate', self.scheduler._last_lr[0], self.training_counter])
+                self.wr_Q.put(['scalar', 'replay/priority_mean', N_count*P_imp.mean().detach().cpu(), self.training_counter])
+                self.wr_Q.put(
+                    ['dist', 'replay/priority_dist', (N_count * P_imp).detach().cpu(), self.training_counter])
+
 
                 # Check accuracy change over unrolls
                 loss, r_loss, v_loss, P_loss = self.criterion(u_batch, r_batches,
@@ -380,6 +385,7 @@ def write_point(writer, type, name, value, index):
 
 
 def writer_worker(wr_Q):
+    np.random.seed(0)
     writer = SummaryWriter()
     name_list = ["environment/steps", "environment/total_reward"]
     updater = fix_out_of_order(name_list, writer)

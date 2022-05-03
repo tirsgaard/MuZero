@@ -31,9 +31,10 @@ class state_node:
         self.illegal_actions[illegal_actions.astype("bool")] = float("-inf")
 
 class min_max_vals:
-    def __init__(self):
-        self.max = -float("inf")  # Values have been reversed to skip normalisation until 2 values have been found
-        self.min = float("inf")
+    def __init__(self, min_val=None, max_val=None):
+        # Default values have been reversed to skip normalisation until 2 values have been found
+        self.max = -float("inf") if max_val is None else max_val
+        self.min = float("inf") if min_val is None else max_val
 
     def update(self, Q):
         self.max = Q if Q > self.max else self.max
@@ -50,10 +51,6 @@ def generate_root(S_obs, h_Q, f_g_Q, h_send, h_rec, f_g_send, f_g_rec, MCTS_sett
     root_node = state_node(MCTS_settings["action_size"], 0)
     h_Q.put([S_obs[None], h_send])  # Get hidden state of observation
     S, P, v = h_rec.recv()
-    #stored_jobs = [[S, [], [], root_node, a]]
-    #S_array, u_array, P_array, v_array = expand_node(stored_jobs, f_g_Q, f_g_send, f_g_rec, MCTS_settings)
-    #normalizer = min_max_vals() # This will be thrown away, as the values found here are not used
-    #backup_node(stored_jobs, S, u_array, P, v, normalizer, MCTS_settings)
     root_node.explore(S[0], P, 0, v)
     return root_node
 
@@ -93,7 +90,9 @@ def MCTS(root_node, f_g_Q, MCTS_settings):
     N_MCTS_sim = MCTS_settings["N_MCTS_sim"]
     # Define pipe for GPU process
     conn_rec, conn_send = Pipe(False)
-    normalizer = min_max_vals()
+    min_val = MCTS_settings["min_val"]
+    max_val = MCTS_settings["max_val"]
+    normalizer = min_max_vals(min_val, max_val)
 
     # Begin simulations
     i = 0
@@ -266,14 +265,14 @@ def iterate_tree(tree, parent_node, id, thick_get, normalizer):
         Q_val = parent_node.Q[action]
         Q_norm = normalizer.norm(Q_val)
         node_text = str(child.id+1) \
-                    + "\n Q: " + str(np.round(Q_val, decimals=8)) \
-                    + "\n Q_norm: " + str(np.round(Q_norm, decimals=8)) \
-                    + "\n W: " + str(np.round(parent_node.W[action], decimals=8)) \
-                    + "\n v: " + str(np.round(child.v, decimals=8))
+                    + "\n Q: " + str(np.round(Q_val, decimals=4)) \
+                    + "\n Q_norm: " + str(np.round(Q_norm, decimals=4)) \
+                    + "\n W: " + str(np.round(parent_node.W[action], decimals=4)) \
+                    + "\n v: " + str(np.round(child.v, decimals=4))
         tree.node(str(id[0]), node_text, color=str(int(Q_norm*10+1)), colorscheme="rdylgn11")
         tree.edge(str(parent_id), str(id[0]),
                   penwidth=str(thick_get(visits)),
-                  label="a: " + str(action) + "\n N(a): " + str(int(visits)) + "\n r: " + str(np.round(child.r, decimals=8)),
+                  label="a: " + str(action) + "\n N(a): " + str(int(visits)) + "\n r: " + str(np.round(child.r, decimals=4)),
                   color=str(int(Q_norm * 10 + 1)),
                   colorscheme= "rdylgn11",
                   arrowhead='none')

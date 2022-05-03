@@ -17,11 +17,13 @@ from go_model import ResNet_f, ResNet_g, ConvResNet
 from models import identity_networkH, identity_networkF, identity_networkG, constant_networkF
 import gym
 import hyperparameters as conf
+import numpy as np
 
 import torch
 
-if __name__ == '__main__':
+# TODO remove late start
 
+if __name__ == '__main__':
     # Get configs
     MuZero_settings = conf.MuZero_settings
     experience_settings = conf.experience_settings
@@ -31,7 +33,8 @@ if __name__ == '__main__':
     hidden_shape = (1, ) + MCTS_settings["hidden_S_size"]
     action_size = MCTS_settings["action_size"]
     hidden_input_size = (MCTS_settings["action_size"][0] + 1,) + MCTS_settings["hidden_S_size"]
-
+    torch.manual_seed(0)
+    np.random.seed(1)
     f_model = constant_networkF(hidden_shape, action_size,
                              1024)  # Model for predicting value (v) and policy (p)
     g_model = dummy_networkG(hidden_input_size, hidden_shape, 1024)  # Model for predicting hidden state (S)
