@@ -49,7 +49,6 @@ class dummy_networkG(nn.Module):
         # Add skip connection
         S = S + x[:, 0, None]
 
-
         # Reward state
         reward = self.activation2_1(self.layer2_1(x_flat))
         reward = self.layer2_2(reward)
@@ -116,7 +115,9 @@ class constant_networkF(nn.Module):
         # Value head
         self.layer2_1 = nn.Linear(np.prod(input_shape), self.hidden_size)
         self.activation2_1 = nn.ReLU()
-        self.layer2_2 = nn.Linear(self.hidden_size, 1)
+        self.layer2_2 = nn.Linear(self.hidden_size, self.hidden_size)
+        self.activation2_2 = nn.ReLU()
+        self.layer2_3 = nn.Linear(self.hidden_size, 1)
 
     def forward(self, x):
         bs = x.shape[0]
@@ -125,8 +126,8 @@ class constant_networkF(nn.Module):
         policy = torch.ones((bs,) + self.output1_shape)/np.prod(self.output1_shape)  # Residual connection
         # Value head
         value = self.activation2_1(self.layer2_1(x_flat))
-        value = self.layer2_2(value)
-        value = value
+        value = self.activation2_2(self.layer2_2(value))
+        value = self.layer2_3(value)
         return [policy, value]
 
 

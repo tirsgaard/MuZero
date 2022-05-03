@@ -254,7 +254,7 @@ class model_trainer:
                 self.wr_Q.put(['scalar', 'Policy_loss/train', P_loss.mean().detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Policy_loss_dist/train', P_loss.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['scalar', 'learning_rate', self.scheduler._last_lr[0], self.training_counter])
-                self.wr_Q.put(['scalar', 'replay/priority_mean', N_count*P_imp.mean().detach().cpu(), self.training_counter])
+                self.wr_Q.put(['scalar', 'replay/priority_mean', (N_count*P_imp).mean().detach().cpu(), self.training_counter])
                 self.wr_Q.put(
                     ['dist', 'replay/priority_dist', (N_count * P_imp).detach().cpu(), self.training_counter])
 

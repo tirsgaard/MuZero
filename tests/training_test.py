@@ -38,7 +38,8 @@ if __name__ == '__main__':
                          "lr_decay_rate": 0.5, # Original Atari rate was 0.1
                          "lr_decay_steps": 10000,  # Original Atari was 350e3
                          "momentum": 0.9,  # Original was 0.9
-                         "weight_decay": 1e-4
+                         "weight_decay": 1e-4,
+                         "uniform_sampling": False,
                          }
     torch.manual_seed(0)
     np.random.seed(1)
