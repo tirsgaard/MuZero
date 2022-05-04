@@ -36,7 +36,7 @@ if __name__ == '__main__':
     hidden_input_size = (MCTS_settings["action_size"][0] + 1,) + MCTS_settings["hidden_S_size"]
     torch.manual_seed(0)
     np.random.seed(1)
-    f_model = oracleF() #constant_networkF(hidden_shape, action_size,
+    f_model = constant_networkF(hidden_shape, action_size, 32)  #oracleF() #constant_networkF(hidden_shape, action_size,
                              #32)  # Model for predicting value (v) and policy (p)
     g_model = oracleG() #oracleG() #dummy_networkG(hidden_input_size, hidden_shape, 32)  # Model for predicting hidden state (S)
     h_model = oracleH() #dummy_networkH((experience_settings["past_obs"],) + MCTS_settings["observation_size"], hidden_shape,

@@ -85,4 +85,4 @@ def verify_run(S_array, a_array, r_array, v_array):
     correct_vals = S_idx % 2 == a_array
     # Check if reward sums correctly
     assert(np.sum(correct_vals) == np.sum(r_array))
-    assrt(np.any(S[:-1,0,1] != 0))
+    assert(np.any(S_array[:-1,0,1] != 0))
