@@ -173,8 +173,8 @@ class model_trainer:
         self.optimizer = optim.Adam(self.muZero.parameters(), lr=self.lr_init, weight_decay=self.weight_decay)
 
         gamma = self.lr_decay_rate ** (1 / self.lr_decay_steps)
-        #self.scheduler = StepLR(self.optimizer, step_size=1, gamma=gamma)
-        self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', verbose=True, patience=0, eps=1)
+        self.scheduler = StepLR(self.optimizer, step_size=1, gamma=gamma)
+        #self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', verbose=True, patience=0, eps=1)
 
     def convert_torch(self, tensors):
         converted = []
@@ -207,7 +207,7 @@ class model_trainer:
                                                           P_imp, N_count, self.beta)
             loss.backward()
             self.optimizer.step()
-            self.scheduler.step(loss)
+            self.scheduler.step()
 
             self.ER.update_weightings(p_vals.mean(axis=1), batch_idx)
 

@@ -19,7 +19,7 @@ experience_settings = {"history_size": 10**3,  # The number of sequences of fram
 # These are the settings for the Monte Carlo Tree Search (MCTS),
 MCTS_settings = {"n_parallel_explorations": 1,  # Number of pseudo-parrallel runs of the MCTS, note >16 reduces accuracy significantly
                  "action_size": (2,),  # size of action space
-                 "observation_size": (4, ),  # shape of observation space
+                 "observation_size": (2, 2),  # shape of observation space
                  "hidden_S_size": (2, 2),  # Size of the hidden state
                  "hidden_S_channel": 1,  # Size of the hidden state
                  "virtual_loss": 3,  # Magnitude of loss during parallel explorations

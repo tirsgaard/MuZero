@@ -17,6 +17,7 @@ from go_model import ResNet_f, ResNet_g, ConvResNet
 from models import identity_networkH, identity_networkF, identity_networkG, constant_networkF
 import gym
 import hyperparameters as conf
+from test_env import testEnv
 import numpy as np
 
 import torch
@@ -36,10 +37,10 @@ if __name__ == '__main__':
     torch.manual_seed(0)
     np.random.seed(1)
     f_model = constant_networkF(hidden_shape, action_size,
-                             1024)  # Model for predicting value (v) and policy (p)
-    g_model = dummy_networkG(hidden_input_size, hidden_shape, 1024)  # Model for predicting hidden state (S)
+                             32)  # Model for predicting value (v) and policy (p)
+    g_model = dummy_networkG(hidden_input_size, hidden_shape, 32)  # Model for predicting hidden state (S)
     h_model = dummy_networkH((experience_settings["past_obs"],) + MCTS_settings["observation_size"], hidden_shape,
-                             1024)  # Model for converting environment state to hidden state
+                             32)  # Model for converting environment state to hidden state
 
 
     #h_model = ConvResNet(experience_settings["past_obs"], MCTS_settings["hidden_S_channel"], hidden_shape)  # identity_networkH((1, 2, 2), hidden_shape)
@@ -75,7 +76,7 @@ if __name__ == '__main__':
             self.iters += 1
             return rew
 
-    env_maker = lambda: RewardWrapper(gym.make("CartPole-v1"))
+    env_maker = lambda: testEnv()#RewardWrapper(gym.make("CartPole-v1"))
 
     # Construct model trainer and experience storage
     torch.multiprocessing.set_start_method('spawn', force=True)

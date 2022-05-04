@@ -141,11 +141,12 @@ def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZe
     turns = 0
     # Start game
     F = env.reset()
-    S_obs = frame_stack.get_stack(F)
     # Loop over all turns in environment
     while True:
         turns += 1
         #env.render()
+        F_new = F
+        S_obs = frame_stack.get_stack(F_new)
         # Check for error
         root_node = generate_root(S_obs, h_Q, f_g_Q, h_send, h_rec, f_g_send, f_g_rec, MCTS_settings)
         root_node, normalizer = MCTS(root_node, f_g_Q, MCTS_settings)
@@ -158,7 +159,6 @@ def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZe
             if MuZero_settings["save_image"]:
                 env_image = env.render(mode="rgb_array")
                 plt.imsave('MCT_graphs/' + str(game_id) + '_env_image' + '.jpeg', env_image)
-        verify_nodes(root_node, MCTS_settings)
 
         # Compute action distribution from policy
         pi_legal = root_node.N / (root_node.N_total - 1)  # -1 to not count exploration of the root-node itself
@@ -169,13 +169,12 @@ def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZe
         action = np.random.choice(n_actions, size=1, p=pi_scaled)[0]
 
         # Pick move
-        root_node = root_node.action_edges[action]
+        v = root_node.v[0][0]
         F_new, r, done, info = env.step(action)
         total_R += r
         # Save Data
-        ER.store(F, action, r, done, root_node.v, pi_legal)
-        F = F_new
-        S_obs = frame_stack.get_stack(F)
+        ER.store(F, action, r, done, v, pi_legal)
+
         if done:
             # Check for termination of environment
             wr_Q.put(['scalar', 'environment/steps', turns, game_id])
