@@ -16,10 +16,10 @@ class testEnv(gym.Env):
         """
         self.action_space = spaces.Discrete(2)
         self.observation_space = spaces.Box(low=-1, high=1, shape=(2, 2))
-        self.max_lives = 1
+        self.max_lives = 10
         self.step_number = 0
         self.lives = self.max_lives
-        self.max_length = 5
+        self.max_length = 100
         self.done = False
 
     def return_obs(self):
@@ -78,3 +78,11 @@ class testEnv(gym.Env):
         This method provides the user with the option to perform any necessary cleanup.
         """
         pass
+
+def verify_run(S_array, a_array, r_array, v_array):
+    S_idx = S_array[:,0,0]
+    n_vals = S_idx.shape[0]
+    correct_vals = S_idx % 2 == a_array
+    # Check if reward sums correctly
+    assert(np.sum(correct_vals) == np.sum(r_array))
+    assrt(np.any(S[:-1,0,1] != 0))

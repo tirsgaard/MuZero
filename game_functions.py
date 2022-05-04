@@ -140,12 +140,11 @@ def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZe
     total_R = 0
     turns = 0
     # Start game
-    F = env.reset()
+    F_new = env.reset()
     # Loop over all turns in environment
     while True:
         turns += 1
         #env.render()
-        F_new = F
         S_obs = frame_stack.get_stack(F_new)
         # Check for error
         root_node = generate_root(S_obs, h_Q, f_g_Q, h_send, h_rec, f_g_send, f_g_rec, MCTS_settings)
@@ -170,6 +169,7 @@ def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZe
 
         # Pick move
         v = root_node.v[0][0]
+        F = F_new  # Store old obs
         F_new, r, done, info = env.step(action)
         total_R += r
         # Save Data
