@@ -55,10 +55,10 @@ def gpu_worker(gpu_Q, input_shape, MCTS_settings, model, f_model, use_g_model):
             # Evaluate and send jobs
             if use_g_model:
                 # Case where worker uses f and g model
-                f_g_process(batch, pipe_queue, jobs_indexes, model, f_model, num_eval, wr_Q)
+                f_g_process(batch[:num_jobs], pipe_queue, jobs_indexes, model, f_model, num_eval, wr_Q)
             else:
                 # Case where worker uses f and h model
-                h_f_process(batch, pipe_queue, jobs_indexes, model, f_model, num_eval, wr_Q)
+                h_f_process(batch[:num_jobs], pipe_queue, jobs_indexes, model, f_model, num_eval, wr_Q)
 
             # Update calibration
             if ((num_eval % (batch_test_length + 1)) == 0) and (not calibration_done):

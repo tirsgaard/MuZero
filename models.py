@@ -193,6 +193,40 @@ class identity_networkG(nn.Module):
         reward = self.layer2_1(x_flat)
         return [S, reward]
 
+class oracleH(nn.Module):
+    def __init__(self):
+        super(oracleH, self).__init__()
+
+    def forward(self, x):
+        S = x
+        return torch.reshape(S, (-1, 1, 2, 2))
+
+class oracleG(nn.Module):
+    def __init__(self):
+        super(oracleG, self).__init__()
+
+    def forward(self, x):
+        S = x[:, 0].clone()
+        old_step = S[:, 0, 0]
+        action = x[:, 1, 0, 0] != 0  # Is this action 0
+        S[:, 0, 0] += 1
+        reward = old_step % 2 == action
+        S[:, 0, 1] -= (~reward).to(torch.long)
+        return [S[:, None], reward[:, None].to(torch.float32)]
+
+class oracleF(nn.Module):
+    def __init__(self):
+        super(oracleF, self).__init__()
+
+    def forward(self, x):
+        step = x[:, 0, 0, 0]
+        v = 100 - step
+        best_action = (step % 2).to(torch.long)
+        P = torch.ones(x.shape[0], 2)*0.2
+        P[:, best_action] = 0.8
+        return [P, v[:, None]]
+
+
 class muZero(nn.Module):
     def __init__(self, f_model, g_model, h_model, K, hidden_S_size, action_size):
         super(muZero, self).__init__()
