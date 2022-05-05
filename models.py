@@ -214,6 +214,30 @@ class oracleG(nn.Module):
         S[:, 0, 1] -= (~reward).to(torch.long)
         return [S[:, None], reward[:, None].to(torch.float32)]
 
+class half_oracleG(nn.Module):
+    def __init__(self, input_shape, hidden_size):
+        super(oracleG, self).__init__()
+        self.hidden_size = hidden_size
+        # Reward head
+        self.layer2_1 = nn.Linear(np.prod(input_shape), self.hidden_size)
+        self.activation2_1 = nn.ReLU()
+        self.layer2_2 = nn.Linear(self.hidden_size, 1)
+
+    def forward(self, x):
+        S = x[:, 0].clone()
+        old_step = S[:, 0, 0]
+        action = x[:, 1, 0, 0] != 0  # Is this action 0
+        S[:, 0, 0] += 1
+        reward = old_step % 2 == action
+        S[:, 0, 1] -= (~reward).to(torch.long)
+
+        # Reward state
+        x_flat = x.view((-1,) + (np.prod(self.input_shape),))  # Flatten
+        reward = self.activation2_1(self.layer2_1(x_flat))
+        reward = self.layer2_2(reward)
+        reward = reward
+        return [S[:, None], reward]
+
 class oracleF(nn.Module):
     def __init__(self):
         super(oracleF, self).__init__()

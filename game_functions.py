@@ -117,7 +117,7 @@ def h_f_process(batch, pipe_queue, jobs_indexes, h_model, f_model, num_eval, wr_
         index_start = index_end
 
 def temperature_scale(N, temp):
-    N_temp = N**temp
+    N_temp = N**(1/temp)
     return N_temp/np.sum(N_temp)
 
 
@@ -180,6 +180,7 @@ def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZe
             wr_Q.put(['scalar', 'environment/steps', turns, game_id])
             wr_Q.put(['scalar', 'environment/total_reward', total_R, game_id])
             env.close()
+            tree = map_tree(root_node, normalizer, game_id)
             break
 
 def sim_game_worker(env_maker, f_g_Q, h_Q, EX_Q, lock, game_counter, seed, MCTS_settings, MuZero_settings, experience_settings):
