@@ -213,7 +213,7 @@ class oracleG(nn.Module):
         S[:, 0, 0] += 1
         reward = old_step % 2 == action
         S[:, 0, 1] -= (~reward).to(torch.long)
-        reward = reward*(old_step < 100)
+        reward = reward*(old_step < 101)
         return [S[:, None], reward[:, None].to(torch.float32)]
 
 class half_oracleG(nn.Module):
