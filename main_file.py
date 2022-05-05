@@ -86,7 +86,7 @@ if __name__ == '__main__':
     MCTS_settings["Q_writer"] = Q_writer
     ER_Q = Queue()
     ER_worker = Process(target=train_ex_worker, args=(ER_Q, f_model, g_model, h_model, experience_settings, training_settings, MCTS_settings))
-    #ER_worker.start()
+    ER_worker.start()
 
     # Worker for storing statistics
     torch.multiprocessing.set_start_method('fork', force=True)

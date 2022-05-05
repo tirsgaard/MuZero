@@ -2,6 +2,7 @@ import numpy as np
 from collections import deque, Counter
 from torch.multiprocessing import Process, Queue, Pipe, Value, Lock, Manager, Pool
 import graphviz
+import torch.nn as nn
 from models import stack_a
 class state_node:
     def __init__(self, action_size, id):
@@ -278,3 +279,8 @@ def iterate_tree(tree, parent_node, id, thick_get, normalizer):
                   arrowhead='none')
         iterate_tree(tree, child, id, thick_get, normalizer)
     return tree
+
+def gradient_clipper(model: nn.Module) -> nn.Module:
+    for parameter in model.parameters():
+        parameter.register_hook(lambda grad: grad * 0.5)
+    return model

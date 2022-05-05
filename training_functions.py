@@ -16,8 +16,6 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR, ReduceLROnPlateau
 from storage_functions import experience_replay_server
 from torch.utils.tensorboard import SummaryWriter
-from models import stack_a_torch
-import torch.nn as nn
 from models import muZero
 import warnings
 # 1. Disabled functions: action appending of hidden dynamic state
@@ -334,6 +332,7 @@ class model_trainer:
         end_time = time.time()
         speed = length_training / (end_time - start_time)
         self.wr_Q.put(['scalar', 'Other/iterations_pr_sec', speed, self.training_counter])
+
 
 
 

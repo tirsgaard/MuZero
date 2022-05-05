@@ -3,6 +3,7 @@ from functools import partial
 import torch
 import numpy as np
 import torch.nn.functional as F
+
 cuda = torch.cuda.is_available()
 if cuda:
     torch.set_default_tensor_type("torch.cuda.FloatTensor")
@@ -212,6 +213,7 @@ class oracleG(nn.Module):
         S[:, 0, 0] += 1
         reward = old_step % 2 == action
         S[:, 0, 1] -= (~reward).to(torch.long)
+        reward = reward*(old_step < 100)
         return [S[:, None], reward[:, None].to(torch.float32)]
 
 class half_oracleG(nn.Module):
@@ -251,15 +253,18 @@ class oracleF(nn.Module):
         return [P, v[:, None]]
 
 
+
 class muZero(nn.Module):
     def __init__(self, f_model, g_model, h_model, K, hidden_S_size, action_size):
         super(muZero, self).__init__()
         self.f_model = f_model
-        self.g_model = g_model
+        self.g_model = gradient_clipper(g_model)  # Scale gradient with 0.5
         self.h_model = h_model
         self.K = K
         self.hidden_S_size = hidden_S_size
         self.action_size = action_size
+
+
 
     def forward(self, S, a_batch, z_batch):
         p_vals = []  # Number
@@ -292,3 +297,8 @@ def h_inverse_scale(y, epsilon = 0.01):
     intermid = (torch.sqrt(1+4*epsilon*(torch.abs(y)+1+epsilon))-1)/(2*epsilon)
     x = torch.sign(y)*(intermid*intermid-1)
     return x
+
+def gradient_clipper(model: nn.Module) -> nn.Module:
+    for parameter in model.parameters():
+        parameter.register_hook(lambda grad: grad * 0.5)
+    return model
