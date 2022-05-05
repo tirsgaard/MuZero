@@ -23,7 +23,7 @@ MCTS_settings = {"n_parallel_explorations": 1,  # Number of pseudo-parrallel run
                  "hidden_S_size": (2, 2),  # Size of the hidden state
                  "hidden_S_channel": 1,  # Size of the hidden state
                  "virtual_loss": 3,  # Magnitude of loss during parallel explorations
-                 "number_of_threads": 1,  # Number of games / threads to run on CPU
+                 "number_of_threads": 4,  # Number of games / threads to run on CPU
                  "N_MCTS_sim": 20,  # Number of MCTS simulations for each action
                  "c1": 1.25,  # parameter for pUCT selection
                  "c2": 19652,

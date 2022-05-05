@@ -258,7 +258,7 @@ class muZero(nn.Module):
     def __init__(self, f_model, g_model, h_model, K, hidden_S_size, action_size):
         super(muZero, self).__init__()
         self.f_model = f_model
-        self.g_model = gradient_clipper(g_model)  # Scale gradient with 0.5
+        self.g_model = g_model  # Scale gradient with 0.5
         self.h_model = h_model
         self.K = K
         self.hidden_S_size = hidden_S_size
