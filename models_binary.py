@@ -33,8 +33,8 @@ class oracleG(nn.Module):
     def forward(self, x):
         S = x[:, 0, :, :].clone()
         old_step = S[:, 2, 0]
-        action = x[:, 1, 0, 0] != 0  # Is this action 1
-        reward = old_step % 2 == action
+        action = x[:, 1, 0, 0] != 0  # Is this action 0
+        reward = old_step != action
         loose_life = (~reward).to(torch.long)
 
         # Convert from binary to decimal

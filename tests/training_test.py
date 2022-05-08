@@ -12,8 +12,8 @@ import torch
 import numpy as np
 import torch.nn.functional as F
 from resnet_model import ResNet
-from models import identity_networkH, identity_networkF, identity_networkG
 from torchvision.models.resnet import BasicBlock
+from models import identity_networkH, identity_networkF, identity_networkG
 
 
 if __name__ == '__main__':
