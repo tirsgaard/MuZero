@@ -13,6 +13,7 @@ import time
 import torch
 import sys
 import torch.optim as optim
+import torch.nn as nn
 from torch.optim.lr_scheduler import StepLR, ReduceLROnPlateau
 from storage_functions import experience_replay_server
 from torch.utils.tensorboard import SummaryWriter
@@ -95,9 +96,11 @@ def squared_loss(u, r, z, v, pi, P, P_imp, N, beta, mean=True):
         loss = torch.sum((pi_tens-P_tens)**2, dim=2)
         return loss
 
+    kl_loss = nn.KLDivLoss(reduction='none', log_target=True)
+
     reward_error = l_r(u, r)
     value_error = l_v(z, v)
-    policy_error = l_p(pi, P)
+    policy_error = kl_loss(P.log(), pi.log()).sum(dim=2)
     total_error = reward_error + value_error + policy_error
     total_error = (total_error/(P_imp[:,None] * N))**beta  # Scale gradient with importance weighting
     #total_error = torch.mean((total_error / N) ** beta)  # Scale gradient without importance weighting
@@ -195,7 +198,7 @@ class model_trainer:
                                                                                                             self.K,
                                                                                                             uniform_sampling=self.uniform_sampling)
             S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp = self.convert_torch([S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp])
-
+            assert(torch.all(pi_batch.sum(dim=2) == 1.))
             # Optimize
             self.optimizer.zero_grad()
             P_batches, v_batches, r_batches, p_vals = self.muZero.forward(S_batch, a_batch, z_batch)
@@ -237,6 +240,14 @@ class model_trainer:
                     self.wr_Q.put(['scalar', 'oracle/r' + str(k+1), torch.max(torch.abs(S_batch[:, -1, 0, 0, 0] + k - u_batch[:, k])).detach().cpu(),
                      self.training_counter])
                 """
+                test = (S_batch[:, 0, 0, 0] % 2).to(torch.long)
+                best_val = pi_batch[range(test.shape[0]), 0, test]
+                self.wr_Q.put(['scalar', 'stats/mean_best_act', best_val.mean().detach().cpu(), self.training_counter])
+                self.wr_Q.put(['scalar', 'stats/var_best_act', best_val.var().detach().cpu(), self.training_counter])
+                best_val = P_batches[range(test.shape[0]), 0, test]
+                self.wr_Q.put(['scalar', 'stats/mean_best_pred', best_val.mean().detach().cpu(), self.training_counter])
+                self.wr_Q.put(['scalar', 'stats/var_best_pred', best_val.var().detach().cpu(), self.training_counter])
+
                 # Log summary statistics
                 self.wr_Q.put(['dist', 'Output/v', v_batches.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Output/P', P_batches.detach().cpu(), self.training_counter])
@@ -255,6 +266,13 @@ class model_trainer:
                 self.wr_Q.put(['scalar', 'replay/priority_mean', (N_count*P_imp).mean().detach().cpu(), self.training_counter])
                 self.wr_Q.put(
                     ['dist', 'replay/priority_dist', (N_count * P_imp).detach().cpu(), self.training_counter])
+
+                # Check loss for example loss
+                kl_loss = nn.KLDivLoss(reduction='none', log_target=False)
+                pred_pol = torch.zeros(pi_batch.shape) + 0.326
+                pred_pol[range(test.shape[0]), 0, test] = 0.674
+                policy_error = kl_loss(pred_pol.log(), pi_batch).sum(dim=2)
+                self.wr_Q.put(['scalar', 'stats/test_loss', policy_error.mean().detach().cpu(), self.training_counter])
 
 
                 # Check accuracy change over unrolls

@@ -79,6 +79,81 @@ class testEnv(gym.Env):
         """
         pass
 
+
+
+class binTestEnv(gym.Env):
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 50}
+    def __init__(self):
+        """
+        Every environment should be derived from gym.Env and at least contain the variables observation_space and action_space
+        specifying the type of possible observations and actions using spaces.Box or spaces.Discrete.
+        Example:
+        >>> EnvTest = FooEnv()
+        >>> EnvTest.observation_space=spaces.Box(low=-1, high=1, shape=(3,4))
+        >>> EnvTest.action_space=spaces.Discrete(2)
+        """
+        self.action_space = spaces.Discrete(2)
+        self.observation_space = spaces.Box(low=-1, high=1, shape=(3, 3))
+        self.max_lives = 10
+        self.step_number = 0
+        self.lives = self.max_lives
+        self.max_length = 100
+        self.done = False
+
+    def return_obs(self):
+        S = np.array(list(np.binary_repr(self.step_number, width=7)) + [self.lives] + [np.random.rand()], dtype=float)
+        return S.reshape((3, 3))
+
+    def step(self, action):
+        """
+        This method is the primary interface between environment and agent.
+        Paramters:
+            action: int
+                    the index of the respective action (if action space is discrete)
+        Returns:
+            output: (array, float, bool)
+                    information provided by the environment about its current state:
+                    (observation, reward, done)
+        """
+        if not self.done:
+            correct_choice = self.step_number % 2 == action
+            reward = float(correct_choice)
+            self.lives -= float(not correct_choice)  # If incorrect choice is made, loose 1 life
+            self.step_number += 1
+
+            observation = self.return_obs()
+            self.done = (self.step_number == self.max_length) or (self.lives == 0)
+            return observation, reward, self.done, None
+        else:
+            return
+
+
+    def reset(self):
+        """
+        This method resets the environment to its initial values.
+        Returns:
+            observation:    array
+                            the initial state of the environment
+        """
+        self.step_number = 0
+        self.lives = self.max_lives
+        self.done = False
+        S = self.return_obs()
+        return S
+
+    def render(self, mode='human', close=False):
+        """
+        This methods provides the option to render the environment's behavior to a window
+        which should be readable to the human eye if mode is set to 'human'.
+        """
+        pass
+
+    def close(self):
+        """
+        This method provides the user with the option to perform any necessary cleanup.
+        """
+        pass
+
 def verify_run(S_array, a_array, r_array, v_array):
     S_idx = S_array[:,0,0]
     n_vals = S_idx.shape[0]

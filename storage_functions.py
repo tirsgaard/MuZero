@@ -120,13 +120,15 @@ class experience_replay_server:
         # Loop over all batch entries
         for i in range(batch_size):
             S, a, r, done, pi, z = self.get_sample(batch_idx[i], K)
+            assert(np.all(pi.sum(axis=1) == 1.))
             pad_length = self.K - len(z)
             # Pad samples if a value after termination extends into K length
             if pad_length != 0:
                 a = np.pad(a, (0, pad_length), mode='constant', constant_values=np.random.randint(0, self.n_actions))
                 r = np.pad(r, (0, pad_length), mode='constant', constant_values=0)
                 done = np.pad(done, (0, pad_length), mode='constant', constant_values=1)
-                pi = np.pad(pi, ((0, pad_length), (0, 0)), mode='constant', constant_values=1/len(pi))  # Assume equal taken action
+                pi = np.pad(pi, ((0, pad_length), (0, 0)), mode='constant', constant_values=1/pi.shape[-1])  # Assume equal taken action
+                assert(np.all(pi.sum(axis=1) == 1.))
                 z = np.pad(z, (0, pad_length), mode='constant', constant_values=0)
 
             S_batch.append(S)

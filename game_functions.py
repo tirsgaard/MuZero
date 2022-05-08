@@ -161,11 +161,13 @@ def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZe
 
         # Compute action distribution from policy
         pi_legal = root_node.N / (root_node.N_total - 1)  # -1 to not count exploration of the root-node itself
-        temp = 0.25 + 0.99**game_id
+        temp = 0.25# + 0.99**game_id
         pi_scaled = temperature_scale(pi_legal, temp)
 
         # Selecet action
         action = np.random.choice(n_actions, size=1, p=pi_scaled)[0]
+        print(int(S_obs[0,0,0]) % 2)
+        print(pi_legal[int(S_obs[0,0,0]) % 2])
 
         # Pick move
         v = root_node.v[0][0]

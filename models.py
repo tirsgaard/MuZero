@@ -252,7 +252,30 @@ class oracleF(nn.Module):
         P[:, best_action] = 0.8
         return [P, v[:, None]]
 
+class half_oracleF(nn.Module):
+    def __init__(self, input_shape, output1_shape, hidden_size):
+        super(half_oracleF, self).__init__()
+        self.input_shape = input_shape
+        self.output1_shape = output1_shape
+        self.hidden_size = hidden_size
+        self.train_count = 0
+        # Policy head
+        self.layer1_1 = nn.Linear(np.prod(input_shape), self.hidden_size)
+        self.activation1_1 = nn.ReLU()
+        self.layer1_2 = nn.Linear(self.hidden_size, np.prod(output1_shape))
+        self.activation1_2 = nn.Softmax(dim=1)
+        # Value head
 
+    def forward(self, x):
+        step = x[:, 0, 0, 0]
+        v = (100 - step) * ((x[:, 0, 0, 1]>0) * (step<100))
+        x_flat = x.view((-1, ) + (np.prod(self.input_shape),) )  # Flatten
+        # Policy head
+        policy = self.activation1_1(self.layer1_1(x_flat))
+        policy = self.activation1_2(self.layer1_2(policy))
+        policy = torch.reshape(policy, (-1,) + self.output1_shape)  # Residual connection
+        # Value head
+        return [policy, v[:, None]]
 
 class muZero(nn.Module):
     def __init__(self, f_model, g_model, h_model, K, hidden_S_size, action_size):
@@ -263,8 +286,6 @@ class muZero(nn.Module):
         self.K = K
         self.hidden_S_size = hidden_S_size
         self.action_size = action_size
-
-
 
     def forward(self, S, a_batch, z_batch):
         p_vals = []  # Number

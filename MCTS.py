@@ -128,7 +128,8 @@ def select_node(root_node, normalizer, leaf_number, MCTS_settings):
         # Choose action
         current_node.U = current_node.P * np.sqrt(current_node.N_total - 1)*temp/(1+current_node.N)  # -1 because of root node
         Q_normed = normalizer.norm(current_node.Q)
-        a_chosen = np.argmax(Q_normed + current_node.U + current_node.illegal_actions)
+        weights = Q_normed + current_node.U + current_node.illegal_actions
+        a_chosen = np.argmax(weights + np.random.rand(weights.shape[0])*1e-10)  # Add random noise to break tiebreaker
 
         # Add current node to path
         current_path.append((current_node, a_chosen))

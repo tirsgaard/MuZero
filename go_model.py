@@ -231,6 +231,20 @@ class ResNet_f(nn.Module):
         value = self.valueHead(x)
         return [policy, value]
 
+class ResNet_oracle_f(nn.Module):
+    def __init__(self, in_channels, filter_size, output_size, policy_output_shape, value_size, *args, **kwargs):
+        super().__init__()
+        self.encoder = ResNetEncoder(in_channels, blocks_sizes=[filter_size], *args, **kwargs)
+        self.policyHead = policyHead(filter_size, output_size, policy_output_shape, *args, **kwargs)
+        self.valueHead = valueHead(filter_size, value_size, *args, **kwargs)
+
+    def forward(self, x):
+        x = self.encoder(x)
+        policy = self.policyHead(x)
+        step = x[:, 0, 0, 0]
+        v = (100 - step) * ((x[:, 0, 0, 1] > 0) * (step < 100))
+        return [policy, v[:, None]]
+
 
 class StateHead(nn.Module):
     def __init__(self, filter_size=256, input_channel=9, output_shape=(9,), output_channel=32,

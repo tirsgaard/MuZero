@@ -12,12 +12,11 @@ from game_functions import sim_games
 from training_functions import save_model, load_latest_model, model_trainer, train_ex_worker, writer_worker
 from torch.multiprocessing import Process, Queue, Pipe, Value, Lock, Manager, Pool, SimpleQueue
 from storage_functions import experience_replay_server
-from models import dummy_networkF, dummy_networkG, dummy_networkH, oracleG, oracleH, oracleF
-from go_model import ResNet_f, ResNet_g, ConvResNet
-from models import identity_networkH, identity_networkF, identity_networkG, constant_networkF
+#from models import dummy_networkF, dummy_networkG, dummy_networkH, oracleG, oracleH, oracleF, half_oracleF
+from models_binary import oracleG, oracleH, half_oracleF
 import gym
 import hyperparameters as conf
-from test_env import testEnv
+from test_env import binTestEnv
 import numpy as np
 
 import torch
@@ -36,7 +35,7 @@ if __name__ == '__main__':
     hidden_input_size = (MCTS_settings["action_size"][0] + 1,) + MCTS_settings["hidden_S_size"]
     torch.manual_seed(0)
     np.random.seed(1)
-    f_model = constant_networkF(hidden_shape, action_size, 32)  #oracleF() #constant_networkF(hidden_shape, action_size,
+    f_model = half_oracleF(hidden_shape, action_size, 32)  #oracleF() #constant_networkF(hidden_shape, action_size,
                              #32)  # Model for predicting value (v) and policy (p)
     g_model = oracleG() #oracleG() #dummy_networkG(hidden_input_size, hidden_shape, 32)  # Model for predicting hidden state (S)
     h_model = oracleH() #dummy_networkH((experience_settings["past_obs"],) + MCTS_settings["observation_size"], hidden_shape,
@@ -76,7 +75,7 @@ if __name__ == '__main__':
             self.iters += 1
             return rew
 
-    env_maker = lambda: testEnv()#RewardWrapper(gym.make("CartPole-v1"))
+    env_maker = lambda: binTestEnv()#RewardWrapper(gym.make("CartPole-v1"))
 
     # Construct model trainer and experience storage
     torch.multiprocessing.set_start_method('spawn', force=True)
