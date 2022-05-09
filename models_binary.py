@@ -49,6 +49,39 @@ class oracleG(nn.Module):
         return [S, reward[:,None].to(torch.float32)]
 
 
+class half_oracleG(nn.Module):
+    def __init__(self, input_shape, hidden_size):
+        super(oracleG, self).__init__()
+        self.hidden_size = hidden_size
+        # Reward head
+        self.layer2_1 = nn.Linear(np.prod(input_shape), self.hidden_size)
+        self.activation2_1 = nn.ReLU()
+        self.layer2_2 = nn.Linear(self.hidden_size, 1)
+
+    def forward(self, x):
+        S = x[:, 0, :, :].clone()
+        old_step = S[:, 2, 0]
+        action = x[:, 1, 0, 0] != 0  # Is this action 0
+        reward = old_step != action
+        loose_life = (~reward).to(torch.long)
+
+        # Convert from binary to decimal
+        old_step = bin_2_dec(S.reshape((-1, 9))[:, 0:7])
+        reward = reward * (old_step < 101)
+
+        x_flat = x.view((-1,) + (np.prod(self.input_shape),))  # Flatten
+        reward = self.activation2_1(self.layer2_1(x_flat))
+        reward = self.layer2_2(reward)
+
+        bin = dec_2_bin(old_step.to(torch.long) + 1, 7)
+        S = S.reshape(-1,9)
+        S[:, 0:7] = bin
+        S[:, 7] = S[:, 7] - loose_life
+        S[:, 7] = (S[:, 7] > 0)*S[:, 7]  # Keep non-negative
+        S = S.reshape(-1, 1, 3, 3)
+        return [S, reward]
+
+
 class half_oracleF(nn.Module):
     def __init__(self, input_shape, output1_shape, hidden_size):
         super(half_oracleF, self).__init__()

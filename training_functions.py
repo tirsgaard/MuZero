@@ -96,11 +96,11 @@ def squared_loss(u, r, z, v, pi, P, P_imp, N, beta, mean=True):
         loss = torch.sum((pi_tens-P_tens)**2, dim=2)
         return loss
 
-    kl_loss = nn.KLDivLoss(reduction='none', log_target=True)
+    kl_loss = nn.KLDivLoss(reduction='none', log_target=False)
 
     reward_error = l_r(u, r)
     value_error = l_v(z, v)
-    policy_error = kl_loss(P.log(), pi.log()).sum(dim=2)
+    policy_error = kl_loss(P.log(), pi).sum(dim=2)
     total_error = reward_error + value_error + policy_error
     total_error = (total_error/(P_imp[:,None] * N))**beta  # Scale gradient with importance weighting
     #total_error = torch.mean((total_error / N) ** beta)  # Scale gradient without importance weighting
