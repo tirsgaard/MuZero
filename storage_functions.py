@@ -252,7 +252,7 @@ class bootstrap_returner:
 
     def iterate(self, r, v):
         self.r_list.append(r)
-        z = sum(self.gamma_mask[0:len(self.r_list)] * self.r_list) + v*self.gamma**len(self.r_list)  # r_list might not be n-long if terminated before n-steps
+        z = sum(self.gamma_mask[0:len(self.r_list)]*self.r_list) + v*self.gamma**len(self.r_list)  # r_list might not be n-long if terminated before n-steps
         if len(self.r_list) != 0:
             self.r_list.popleft()
         return z
@@ -268,7 +268,7 @@ class bootstrap_returner:
         else:
             n_return = self.n  # Number of values to return
             # Case where environment is done and all values needs to be calculated
-            if len(self.r_list)<(self.n-1):  # -1 to account for value of r has not been added yet
+            if len(self.r_list) < (self.n-1):  # -1 to account for value of r has not been added yet
                 # Case where early termination of environment happened, and list was not filled up
                 self.add_r(r)
                 n_return = len(self.r_list)  # A value for each case in r_list needs to be added

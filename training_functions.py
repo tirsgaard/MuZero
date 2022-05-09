@@ -92,15 +92,14 @@ def squared_loss(u, r, z, v, pi, P, P_imp, N, beta, mean=True):
         return loss
 
     def l_p(pi_tens, P_tens):
+        # Log is already applied to output P_tens
         assert (pi_tens.shape == P_tens.shape)
-        loss = torch.sum((pi_tens-P_tens)**2, dim=2)
+        loss = torch.sum(pi_tens*P_tens, dim=2)
         return loss
-
-    kl_loss = nn.KLDivLoss(reduction='none', log_target=False)
 
     reward_error = l_r(u, r)
     value_error = l_v(z, v)
-    policy_error = kl_loss(P.log(), pi).sum(dim=2)
+    policy_error = l_p(P, pi)
     total_error = reward_error + value_error + policy_error
     total_error = (total_error/(P_imp[:,None] * N))**beta  # Scale gradient with importance weighting
     #total_error = torch.mean((total_error / N) ** beta)  # Scale gradient without importance weighting
@@ -128,10 +127,11 @@ def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta, mean=True):
         return loss
 
     reward_error = l_r(u, r)
+    print(u)
     value_error = l_v(z, v)
     policy_error = l_p(pi, P)
     total_error = reward_error + value_error + policy_error
-    total_error = torch.mean((total_error/(P_imp[:,None] * N))**beta)  # Scale gradient with importance weighting
+    total_error = torch.mean((total_error/(P_imp[:, None] * N))**beta)  # Scale gradient with importance weighting
     #total_error = torch.mean((total_error / N) ** beta)  # Scale gradient without importance weighting
     if mean:
         return total_error.mean(), reward_error.mean(), value_error.mean(), policy_error.mean()

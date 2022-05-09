@@ -10,7 +10,7 @@ class oracleH(nn.Module):
         super(oracleH, self).__init__()
 
     def forward(self, x):
-        return x.reshape(-1, 1, 3, 3)
+        return x.reshape(-1, 1, 3, 3).to(torch.float)
 
 
 def bin_2_dec(bin):
@@ -51,7 +51,8 @@ class oracleG(nn.Module):
 
 class half_oracleG(nn.Module):
     def __init__(self, input_shape, hidden_size):
-        super(oracleG, self).__init__()
+        super(half_oracleG, self).__init__()
+        self.input_shape = input_shape
         self.hidden_size = hidden_size
         # Reward head
         self.layer2_1 = nn.Linear(np.prod(input_shape), self.hidden_size)
