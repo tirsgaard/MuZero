@@ -164,7 +164,7 @@ class policyHead(nn.Module):
 
 
 class valueHead(nn.Module):
-    def __init__(self, filter_size=256, output_size=9,
+    def __init__(self, filter_size=256, output_size=1, heads=1,
                  activation='relu', block=ResNetBasicBlock, *args, **kwargs):
         super().__init__()
         self.output_size = output_size
@@ -174,7 +174,7 @@ class valueHead(nn.Module):
             activation_func(activation))
         self.ff_layer1 = nn.Sequential(nn.Linear(output_size, filter_size, bias=True),
                                        activation_func(activation), nn.BatchNorm1d(filter_size))
-        self.ff_layer2 = nn.Linear(filter_size, 1)
+        self.ff_layer2 = nn.Linear(filter_size, heads)
         #self.tanh_layer = nn.Tanh()
 
     def forward(self, x):
@@ -267,12 +267,12 @@ class StateHead(nn.Module):
 
 
 class ResNet_g(nn.Module):
-    def __init__(self, in_channels, filter_size, policy_output_shape, output_channel, support, *args, **kwargs):
+    def __init__(self, in_channels, filter_size, policy_output_shape, output_channel, output_shape, support, *args, **kwargs):
         super().__init__()
         self.support = support
         self.encoder = ResNetEncoder(in_channels, blocks_sizes=[filter_size], *args, **kwargs)
         self.StateHead = StateHead(filter_size, filter_size, policy_output_shape, output_channel, *args, **kwargs)
-        self.valueHead = valueHead(filter_size, self.support.shape[0], *args, **kwargs)
+        self.valueHead = valueHead(filter_size, output_shape, self.support.shape[0], *args, **kwargs)
         self.log_softmaxer = nn.LogSoftmax(dim=1)
 
     def forward(self, x):
@@ -283,6 +283,6 @@ class ResNet_g(nn.Module):
 
     def mean_pass(self, x):
         non_mean_val, dist = self.forward(x)
-        mean = (self.support[None]*dist.exp()).mean(dim=1)
+        mean = (self.support[None]*dist.exp()).sum(dim=1)
         return non_mean_val, mean
 

@@ -110,7 +110,6 @@ def squared_loss(u, r, z, v, pi, P, P_imp, N, beta, mean=True):
 
 def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta, mean=True):
     # Loss used for atari. Assumes r, v, P are in logspace and sorftmaxed
-
     def cross_entropy(target, input):
         assert (target.shape == input.shape)
         loss = -torch.sum(target*input, dim=2)
@@ -120,7 +119,7 @@ def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta, mean=True):
     value_error = cross_entropy(z, v)
     policy_error = cross_entropy(pi, P)
     total_error = reward_error + value_error + policy_error
-    total_error = torch.mean((total_error/(P_imp[:, None] * N))**beta)  # Scale gradient with importance weighting
+    total_error = (total_error/(P_imp[:, None] * N))**beta  # Scale gradient with importance weighting
     if mean:
         return total_error.mean(), reward_error.mean(), value_error.mean(), policy_error.mean()
     else:
@@ -257,17 +256,10 @@ class model_trainer:
                 self.wr_Q.put(
                     ['dist', 'replay/priority_dist', (N_count * P_imp).detach().cpu(), self.training_counter])
 
-                # Check loss for example loss
-                kl_loss = nn.KLDivLoss(reduction='none', log_target=False)
-                pred_pol = torch.zeros(pi_batch.shape) + 0.326
-                pred_pol[range(test.shape[0]), 0, test] = 0.674
-                policy_error = kl_loss(pred_pol.log(), pi_batch).sum(dim=2)
-                self.wr_Q.put(['scalar', 'stats/test_loss', policy_error.mean().detach().cpu(), self.training_counter])
-
 
                 # Check accuracy change over unrolls
-                loss, r_loss, v_loss, P_loss = self.criterion(u_batch, r_batches,
-                                                              z_batch, v_batches,
+                loss, r_loss, v_loss, P_loss = self.criterion(u_support_batch, r_batches,
+                                                              z_support_batch, v_batches,
                                                               pi_batch, P_batches,
                                                               P_imp, self.ER.N, self.beta,  mean=False)
                 loss_median, _ = loss.median(dim=0)

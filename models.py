@@ -59,7 +59,7 @@ class dummy_networkG(nn.Module):
 
     def mean_pass(self, x):
         non_mean_val, dist = self.forward(x)
-        mean = (self.support[None]*dist.exp()).mean(dim=1)
+        mean = (self.support[None]*dist.exp()).sum(dim=1)
         return non_mean_val, mean
 
 class dummy_networkH(nn.Module):
@@ -311,7 +311,8 @@ class muZero(nn.Module):
             P_batch, v_batch = self.f_model.forward(new_S)
             Sa_batch = stack_a_torch(new_S, a_batch[:, k], self.hidden_S_size, self.action_size)
             new_S, r_batch = self.g_model.forward(Sa_batch)
-            p_vals.append(torch.abs((self.f_model.support[None]*v_batch.exp()).mean(dim=1) - z_batch[:, k]).detach().cpu().numpy())  # For importance weighting
+            importance = torch.abs((self.f_model.support[None]*v_batch.exp()).sum(dim=1) - z_batch[:, k])
+            p_vals.append(importance.detach().cpu().numpy())  # For importance weighting
             P_batches.append(P_batch)
             v_batches.append(v_batch)
             r_batches.append(r_batch)
