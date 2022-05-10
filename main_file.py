@@ -12,7 +12,7 @@ from game_functions import sim_games
 from training_functions import save_model, load_latest_model, model_trainer, train_ex_worker, writer_worker
 from torch.multiprocessing import Process, Queue, Pipe, Value, Lock, Manager, Pool, SimpleQueue
 from storage_functions import experience_replay_server
-#from models import dummy_networkF, dummy_networkG, dummy_networkH, oracleG, oracleH, oracleF, half_oracleF
+from models import dummy_networkF, dummy_networkG, dummy_networkH
 from models_binary import oracleG, oracleH, half_oracleF, half_oracleG
 import gym
 import hyperparameters as conf
@@ -33,11 +33,14 @@ if __name__ == '__main__':
     hidden_shape = (1, ) + MCTS_settings["hidden_S_size"]
     action_size = MCTS_settings["action_size"]
     hidden_input_size = (MCTS_settings["action_size"][0] + 1,) + MCTS_settings["hidden_S_size"]
+    n_heads = MuZero_settings["n_support"]
     torch.manual_seed(0)
     np.random.seed(1)
-    f_model = half_oracleF(hidden_shape, action_size, 32)  #oracleF() #constant_networkF(hidden_shape, action_size,
+
+    support = torch.linspace(MuZero_settings["low_support"], MuZero_settings["high_support"], n_heads)
+    f_model = dummy_networkF(hidden_shape, action_size, 32, support)  #oracleF() #constant_networkF(hidden_shape, action_size,
                              #32)  # Model for predicting value (v) and policy (p)
-    g_model = half_oracleG((3,3,3), 32) #oracleG() #dummy_networkG(hidden_input_size, hidden_shape, 32)  # Model for predicting hidden state (S)
+    g_model = dummy_networkG(hidden_input_size, hidden_shape, 32, support)#half_oracleG((3,3,3), 32) #oracleG() #dummy_networkG(hidden_input_size, hidden_shape, 32)  # Model for predicting hidden state (S)
     h_model = oracleH() #dummy_networkH((experience_settings["past_obs"],) + MCTS_settings["observation_size"], hidden_shape,
                              #32)  # Model for converting environment state to hidden state
 
@@ -46,6 +49,8 @@ if __name__ == '__main__':
     #g_model = ResNet_g(MCTS_settings["hidden_S_channel"]+action_size[0], 32, hidden_shape, MCTS_settings["hidden_S_channel"], 128)  # identity_networkG(hidden_input_size, hidden_shape)
     #f_model = identity_networkF(hidden_shape, action_size)  # ResNet_f(MCTS_settings["hidden_S_channel"], 32, 4, action_size, 128)
 
+
+    # Add mean pass and support
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     # GPU things

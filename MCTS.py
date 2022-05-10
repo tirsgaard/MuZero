@@ -199,9 +199,9 @@ def backup_node(stored_jobs, S_array, r_array, P_array, v_array, normalizer, MCT
     k = 0
     for S, current_path, current_node, leaf_node, a_chosen in stored_jobs:
         P = P_array[k]
-        r = r_array[k][0]
+        r = r_array[k]
         S = S_array[k]
-        v = v_array[k][0]
+        v = v_array[k]
 
         # Add explore information to leaf node
         leaf_node.explore(S, P, r, v)

@@ -24,11 +24,12 @@ def stack_a_torch(S, a, hidden_shape, action_size):
     return Sa
 
 class dummy_networkG(nn.Module):
-    def __init__(self, input_shape, output1_shape, hidden_size):
+    def __init__(self, input_shape, output1_shape, hidden_size, support):
         super().__init__()
         self.input_shape = input_shape
         self.output1_shape = output1_shape
         self.hidden_size = hidden_size
+        self.support = support
         self.train_count = 0
 
         # Hidden state head
@@ -39,8 +40,8 @@ class dummy_networkG(nn.Module):
         # Reward head
         self.layer2_1 = nn.Linear(np.prod(input_shape), self.hidden_size)
         self.activation2_1 = nn.ReLU()
-        self.layer2_2 = nn.Linear(self.hidden_size, 1)
-
+        self.layer2_2 = nn.Linear(self.hidden_size, self.support.shape[0])
+        self.activation2_2 = nn.LogSoftmax(dim=1)
     def forward(self, x):
         x_flat = x.view((-1, ) + (np.prod(self.input_shape),))  # Flatten
         # Hidden state
@@ -52,9 +53,13 @@ class dummy_networkG(nn.Module):
 
         # Reward state
         reward = self.activation2_1(self.layer2_1(x_flat))
-        reward = self.layer2_2(reward)
-        reward = reward
+        reward = self.activation2_2(self.layer2_2(reward))
         return [S, reward]
+
+    def mean_pass(self, x):
+        non_mean_val, dist = self.forward(x)
+        mean = (self.support[None]*dist.exp()).mean(dim=1)
+        return non_mean_val, mean
 
 class dummy_networkH(nn.Module):
     def __init__(self, input_shape, output1_shape, hidden_size):
@@ -77,21 +82,23 @@ class dummy_networkH(nn.Module):
 
 
 class dummy_networkF(nn.Module):
-    def __init__(self, input_shape, output1_shape, hidden_size):
+    def __init__(self, input_shape, output1_shape, hidden_size, support):
         super(dummy_networkF, self).__init__()
         self.input_shape = input_shape
         self.output1_shape = output1_shape
         self.hidden_size = hidden_size
+        self.support = support
         self.train_count = 0
         # Policy head
         self.layer1_1 = nn.Linear(np.prod(input_shape), self.hidden_size)
         self.activation1_1 = nn.ReLU()
         self.layer1_2 = nn.Linear(self.hidden_size, np.prod(output1_shape))
-        self.activation1_2 = nn.Softmax(dim=1)
+        self.activation1_2 = nn.LogSoftmax(dim=1)
         # Value head
         self.layer2_1 = nn.Linear(np.prod(input_shape), self.hidden_size)
         self.activation2_1 = nn.ReLU()
-        self.layer2_2 = nn.Linear(self.hidden_size, 1)
+        self.layer2_2 = nn.Linear(self.hidden_size, self.support.shape[0])
+        self.activation_2_2 = nn.LogSoftmax(dim=1)
 
     def forward(self, x):
         x_flat = x.view((-1, ) + (np.prod(self.input_shape),) )  # Flatten
@@ -101,9 +108,13 @@ class dummy_networkF(nn.Module):
         policy = torch.reshape(policy, (-1,) + self.output1_shape)  # Residual connection
         # Value head
         value = self.activation2_1(self.layer2_1(x_flat))
-        value = self.layer2_2(value)
-        value = value
+        value = self.activation_2_2(self.layer2_2(value))
         return [policy, value]
+
+    def mean_pass(self, x):
+        non_mean_val, dist = self.forward(x)
+        mean = (self.support[None]*dist.exp()).mean(dim=1)
+        return non_mean_val, mean
 
 class constant_networkF(nn.Module):
     def __init__(self, input_shape, output1_shape, hidden_size):
@@ -277,6 +288,7 @@ class half_oracleF(nn.Module):
         # Value head
         return [policy, v[:, None]]
 
+
 class muZero(nn.Module):
     def __init__(self, f_model, g_model, h_model, K, hidden_S_size, action_size):
         super(muZero, self).__init__()
@@ -298,7 +310,7 @@ class muZero(nn.Module):
             P_batch, v_batch = self.f_model.forward(new_S)
             Sa_batch = stack_a_torch(new_S, a_batch[:, k], self.hidden_S_size, self.action_size)
             new_S, r_batch = self.g_model.forward(Sa_batch)
-            p_vals.append(torch.abs(v_batch.squeeze(dim=1) - z_batch[:, k]).detach().cpu().numpy())  # For importance weighting
+            p_vals.append(torch.abs((self.f_model.support[None]*v_batch.exp()).mean(dim=1) - z_batch[:, k]).detach().cpu().numpy())  # For importance weighting
             P_batches.append(P_batch)
             v_batches.append(v_batch)
             r_batches.append(r_batch)
@@ -323,3 +335,27 @@ def gradient_clipper(model: nn.Module) -> nn.Module:
     for parameter in model.parameters():
         parameter.register_hook(lambda grad: grad * 0.5)
     return model
+
+def nearest_supports(input, support):
+    # Expects input to be of shape (B, K) and support in increasing order of shape (N)
+    # Returns index of low and high value of index
+    diffs = input[:, :, None] - support[None, None]
+    diffs[diffs <= 0] = float("Inf")  # Only look for negative smallest values
+    lowest = torch.argmin(torch.abs(diffs), dim=2)
+    highest = lowest + 1
+    return lowest, highest
+
+def calc_support_dist(input, support):
+    n_supp = support.shape[0]
+    n_samples = input.shape[0]*input.shape[1]
+    lowest, highest = nearest_supports(input, support)
+    low_val = support[lowest]
+    high_val = support[highest]
+    support_dist = torch.zeros(input.shape + support.shape, dtype=torch.float32)
+    lowest_p = (input - high_val) / (low_val - high_val)
+    support_dist.view(-1, n_supp)[range(n_samples), lowest.view(-1)] = lowest_p.view(-1)  # There must be an easier way to index
+    support_dist.view(-1, n_supp)[range(n_samples), highest.view(-1)] = 1 - lowest_p.view(-1)
+    return support_dist
+
+
+

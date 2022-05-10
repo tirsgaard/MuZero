@@ -17,7 +17,7 @@ import torch.nn as nn
 from torch.optim.lr_scheduler import StepLR, ReduceLROnPlateau
 from storage_functions import experience_replay_server
 from torch.utils.tensorboard import SummaryWriter
-from models import muZero
+from models import muZero, calc_support_dist
 import warnings
 # 1. Disabled functions: action appending of hidden dynamic state
 # 2. Exponential reduction of learning rate, instead reduce on platau
@@ -99,10 +99,9 @@ def squared_loss(u, r, z, v, pi, P, P_imp, N, beta, mean=True):
 
     reward_error = l_r(u, r)
     value_error = l_v(z, v)
-    policy_error = l_p(P, pi)
+    policy_error = -l_p(P, pi)
     total_error = reward_error + value_error + policy_error
     total_error = (total_error/(P_imp[:,None] * N))**beta  # Scale gradient with importance weighting
-    #total_error = torch.mean((total_error / N) ** beta)  # Scale gradient without importance weighting
     if mean:
         return total_error.mean(), reward_error.mean(), value_error.mean(), policy_error.mean()
     else:
@@ -110,29 +109,18 @@ def squared_loss(u, r, z, v, pi, P, P_imp, N, beta, mean=True):
 
 
 def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta, mean=True):
-    # Loss used for the games go, chess, and shogi. This uses the 2-norm difference of values
-    def l_r(u_tens, r_tens):
-        assert(u_tens.shape == r_tens.shape)
-        loss = (u_tens-r_tens)**2
+    # Loss used for atari. Assumes r, v, P are in logspace and sorftmaxed
+
+    def cross_entropy(target, input):
+        assert (target.shape == input.shape)
+        loss = -torch.sum(target*input, dim=2)
         return loss
 
-    def l_v(z_tens, v_tens):
-        assert (z_tens.shape == v_tens.shape)
-        loss = (z_tens-v_tens)**2
-        return loss
-
-    def l_p(pi_tens, P_tens):
-        assert (pi_tens.shape == P_tens.shape)
-        loss = torch.sum(pi_tens*torch.log(P_tens), dim=2)
-        return loss
-
-    reward_error = l_r(u, r)
-    print(u)
-    value_error = l_v(z, v)
-    policy_error = l_p(pi, P)
+    reward_error = cross_entropy(u, r)
+    value_error = cross_entropy(z, v)
+    policy_error = cross_entropy(pi, P)
     total_error = reward_error + value_error + policy_error
     total_error = torch.mean((total_error/(P_imp[:, None] * N))**beta)  # Scale gradient with importance weighting
-    #total_error = torch.mean((total_error / N) ** beta)  # Scale gradient without importance weighting
     if mean:
         return total_error.mean(), reward_error.mean(), value_error.mean(), policy_error.mean()
     else:
@@ -142,7 +130,6 @@ def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta, mean=True):
 class model_trainer:
     def __init__(self, f_model, g_model, h_model, experience_replay, experience_settings, training_settings, MCTS_settings):
         self.MCTS_settings = MCTS_settings
-        self.criterion = squared_loss
         self.ER = experience_replay
         self.experience_settings = experience_settings
         self.K = experience_settings["K"]
@@ -172,6 +159,7 @@ class model_trainer:
         self.muZero = muZero(self.f_model, self.g_model, self.h_model, self.K, self.hidden_S_size, self.action_size)
         #self.optimizer = optim.SGD(self.muZero.parameters(), lr=self.lr_init, momentum=self.momentum, weight_decay=self.weight_decay)
         self.optimizer = optim.Adam(self.muZero.parameters(), lr=self.lr_init, weight_decay=self.weight_decay)
+        self.criterion = muZero_games_loss
 
         gamma = self.lr_decay_rate ** (1 / self.lr_decay_steps)
         self.scheduler = StepLR(self.optimizer, step_size=1, gamma=gamma)
@@ -198,12 +186,14 @@ class model_trainer:
                                                                                                             self.K,
                                                                                                             uniform_sampling=self.uniform_sampling)
             S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp = self.convert_torch([S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp])
+            u_support_batch = calc_support_dist(u_batch, self.g_model.support)
+            z_support_batch = calc_support_dist(z_batch, self.f_model.support)
             assert(torch.all(pi_batch.sum(dim=2) == 1.))
             # Optimize
             self.optimizer.zero_grad()
             P_batches, v_batches, r_batches, p_vals = self.muZero.forward(S_batch, a_batch, z_batch)
-            loss, r_loss, v_loss, P_loss = self.criterion(u_batch, r_batches,
-                                                          z_batch, v_batches,
+            loss, r_loss, v_loss, P_loss = self.criterion(u_support_batch, r_batches,
+                                                          z_support_batch, v_batches,
                                                           pi_batch, P_batches,
                                                           P_imp, N_count, self.beta)
             loss.backward()

@@ -101,7 +101,7 @@ class binTestEnv(gym.Env):
         self.done = False
 
     def return_obs(self):
-        S = np.array(list(np.binary_repr(self.step_number, width=7)) + [self.lives] + [np.random.rand()], dtype=float)
+        S = np.array(list(np.binary_repr(self.step_number, width=7)) + [self.lives] + [np.random.rand()], dtype=np.float32)
         return S.reshape((3, 3))
 
     def step(self, action):
@@ -117,7 +117,7 @@ class binTestEnv(gym.Env):
         """
         if not self.done:
             correct_choice = self.step_number % 2 == action
-            reward = float(correct_choice)
+            reward = np.float32(correct_choice)
             self.lives -= float(not correct_choice)  # If incorrect choice is made, loose 1 life
             self.step_number += 1
 

@@ -80,8 +80,8 @@ def gpu_worker(gpu_Q, input_shape, MCTS_settings, model, f_model, use_g_model):
 def f_g_process(batch, pipe_queue, jobs_indexes, g_model, f_model, num_eval, wr_Q):
     # Function for processing jobs for booth dynamic (g) and value (f) evaluation model
     # Process data
-    S, u = g_model.forward(batch)
-    result = f_model.forward(S)
+    S, u = g_model.mean_pass(batch)
+    result = f_model.mean_pass(S)
     S = S.cpu().numpy()
     u = u.cpu().numpy()
     P = result[0].exp().cpu().numpy()  # Exponentiate log output
@@ -102,7 +102,7 @@ def h_f_process(batch, pipe_queue, jobs_indexes, h_model, f_model, num_eval, wr_
     # Function for processing jobs for booth dynamic (g) and value (f) evaluation model
     # Process data
     S = h_model.forward(batch)
-    result = f_model.forward(S)
+    result = f_model.mean_pass(S)
     S = S.cpu().numpy()
     P = result[0].exp().cpu().numpy()  # Exponentiate log output
     v = result[1].cpu().numpy()
@@ -168,7 +168,7 @@ def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZe
         action = np.random.choice(n_actions, size=1, p=pi_scaled)[0]
 
         # Pick move
-        v = root_node.v[0][0]
+        v = root_node.v[0]
         F = F_new  # Store old obs
         F_new, r, done, info = env.step(action)
         total_R += r

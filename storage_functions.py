@@ -255,7 +255,7 @@ class bootstrap_returner:
         z = sum(self.gamma_mask[0:len(self.r_list)]*self.r_list) + v*self.gamma**len(self.r_list)  # r_list might not be n-long if terminated before n-steps
         if len(self.r_list) != 0:
             self.r_list.popleft()
-        return z
+        return np.float32(z)
 
     def add_r(self, r):
         self.r_list.append(r)

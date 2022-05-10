@@ -5,6 +5,9 @@ MuZero_settings = {"N_training_games": 200000,  # Total number of games to run p
                     "eta_par": 0.03,  # Distributional value for action selection
                     "epsilon": 0.25,  # Distributional value for action selection
                    "save_image": False,  # Save image of environment when MCT is saved
+                   "low_support": -50,  # Lowest value of supported values for reward and value head
+                   "high_support": 150,  # Highest value of supported values for reward and value head
+                   "n_support": 201,  # Number of support values. To include a value for 0 keep the number of heads odd
                    }
 
 # Settings for experience replay and storing of values in general
@@ -13,7 +16,7 @@ experience_settings = {"history_size": 10**3,  # The number of sequences of fram
                         "epsilon": 0.25,  # Distributional value for action selection
                         "n_bootstrap": 10,  # Number of steps forward to bootstrap from
                         "past_obs": 1,  # Number of past observations to stack. Original Atari was 32
-                        "K": 1  # Number of steps to unroll during training. Needed here to determine delay of sending
+                        "K": 3  # Number of steps to unroll during training. Needed here to determine delay of sending
                    }
 
 # These are the settings for the Monte Carlo Tree Search (MCTS),
@@ -28,13 +31,13 @@ MCTS_settings = {"n_parallel_explorations": 1,  # Number of pseudo-parrallel run
                  "c1": 1.25,  # parameter for pUCT selection
                  "c2": 19652,
                  "gamma": 1,
-                 "min_val": 0,
-                 "max_val": 100,
+                 "min_val": None,
+                 "max_val": None,
                 }  # parameter reinforcement learning
 
 training_settings = {"train_batch_size": 2,  # Batch size on GPU during training
                      "num_epochs": 100,  # Maximum length of training epoch before break
-                     "lr_init": (10**-3),  # Original Atari rate was 0.05
+                     "lr_init": 10**-3,  # Original Atari rate was 0.05
                      "lr_decay_rate": 0.1,
                      "lr_decay_steps": 400e3,  # Original Atari was 350e3
                      "alpha": 1,
