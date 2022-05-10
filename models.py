@@ -42,6 +42,7 @@ class dummy_networkG(nn.Module):
         self.activation2_1 = nn.ReLU()
         self.layer2_2 = nn.Linear(self.hidden_size, self.support.shape[0])
         self.activation2_2 = nn.LogSoftmax(dim=1)
+
     def forward(self, x):
         x_flat = x.view((-1, ) + (np.prod(self.input_shape),))  # Flatten
         # Hidden state

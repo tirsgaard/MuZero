@@ -265,16 +265,24 @@ class StateHead(nn.Module):
         x = torch.reshape(x, (bs, self.output_channel) + self.output_shape)
         return x
 
+
 class ResNet_g(nn.Module):
-    def __init__(self, in_channels, filter_size, policy_output_shape, output_channel, value_size, *args, **kwargs):
+    def __init__(self, in_channels, filter_size, policy_output_shape, output_channel, support, *args, **kwargs):
         super().__init__()
+        self.support = support
         self.encoder = ResNetEncoder(in_channels, blocks_sizes=[filter_size], *args, **kwargs)
         self.StateHead = StateHead(filter_size, filter_size, policy_output_shape, output_channel, *args, **kwargs)
-        self.valueHead = valueHead(filter_size, value_size, *args, **kwargs)
+        self.valueHead = valueHead(filter_size, self.support.shape[0], *args, **kwargs)
+        self.log_softmaxer = nn.LogSoftmax(dim=1)
 
     def forward(self, x):
         x = self.encoder(x)
         state = self.StateHead(x)
-        value = self.valueHead(x)
+        value = self.log_softmaxer(self.valueHead(x))
         return [state, value]
+
+    def mean_pass(self, x):
+        non_mean_val, dist = self.forward(x)
+        mean = (self.support[None]*dist.exp()).mean(dim=1)
+        return non_mean_val, mean
 
