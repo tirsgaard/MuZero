@@ -6,28 +6,28 @@ MuZero_settings = {"N_training_games": 200000,  # Total number of games to run p
                     "epsilon": 0.25,  # Distributional value for action selection
                    "save_image": False,  # Save image of environment when MCT is saved
                    "low_support": -50,  # Lowest value of supported values for reward and value head
-                   "high_support": 150,  # Highest value of supported values for reward and value head
-                   "n_support": 201,  # Number of support values. To include a value for 0 keep the number of heads odd
+                   "high_support": 500,  # Highest value of supported values for reward and value head
+                   "n_support": 551,  # Number of support values. To include a value for 0 keep the number of heads odd
                    }
 
 # Settings for experience replay and storing of values in general
-experience_settings = {"history_size": 10**3,  # The number of sequences of frames to store in memory
-                        "sequence_length": 200,  # The number of frames in each sequence
+experience_settings = {"history_size": 10**4,  # The number of sequences of frames to store in memory
+                        "sequence_length": 501,  # The number of frames in each sequence
                         "epsilon": 0.25,  # Distributional value for action selection
                         "n_bootstrap": 10,  # Number of steps forward to bootstrap from
                         "past_obs": 1,  # Number of past observations to stack. Original Atari was 32
-                        "K": 3  # Number of steps to unroll during training. Needed here to determine delay of sending
+                        "K": 10  # Number of steps to unroll during training. Needed here to determine delay of sending
                    }
 
 # These are the settings for the Monte Carlo Tree Search (MCTS),
 MCTS_settings = {"n_parallel_explorations": 1,  # Number of pseudo-parrallel runs of the MCTS, note >16 reduces accuracy significantly
                  "action_size": (2,),  # size of action space
-                 "observation_size": (3, 3),  # shape of observation space
-                 "hidden_S_size": (3, 3),  # Size of the hidden state
-                 "hidden_S_channel": 1,  # Size of the hidden state
+                 "observation_size": (2, 2),  # shape of observation space
+                 "hidden_S_size": (4, 4),  # Size of the hidden state
+                 "hidden_S_channel": 4,  # Size of the hidden state
                  "virtual_loss": 3,  # Magnitude of loss during parallel explorations
                  "number_of_threads": 1,  # Number of games / threads to run on CPU
-                 "N_MCTS_sim": 200,  # Number of MCTS simulations for each action
+                 "N_MCTS_sim": 40,  # Number of MCTS simulations for each action
                  "c1": 1.25,  # parameter for pUCT selection
                  "c2": 19652,
                  "gamma": 1,

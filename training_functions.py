@@ -108,7 +108,7 @@ def squared_loss(u, r, z, v, pi, P, P_imp, N, beta, mean=True):
         return total_error, reward_error, value_error, policy_error
 
 
-def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta, mean=True):
+def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta, n_iter=0, mean=True):
     # Loss used for atari. Assumes r, v, P are in logspace and sorftmaxed
     def cross_entropy(target, input):
         assert (target.shape == input.shape)
@@ -118,7 +118,7 @@ def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta, mean=True):
     reward_error = cross_entropy(u, r)
     value_error = cross_entropy(z, v)
     policy_error = cross_entropy(pi, P)
-    total_error = reward_error + value_error + policy_error
+    total_error = reward_error + value_error + policy_error*(1-0.99995**n_iter)
     total_error = (total_error/(P_imp[:, None] * N))**beta  # Scale gradient with importance weighting
     if mean:
         return total_error.mean(), reward_error.mean(), value_error.mean(), policy_error.mean()
@@ -188,16 +188,23 @@ class model_trainer:
             u_support_batch = calc_support_dist(u_batch, self.g_model.support)
             z_support_batch = calc_support_dist(z_batch, self.f_model.support)
             assert(torch.all(pi_batch.sum(dim=2) == 1.))
+            assert(torch.all(u_support_batch.sum(dim=2) == 1.))
+            assert(torch.all(z_support_batch.sum(dim=2) == 1.))
+            assert(torch.all((self.g_model.support[None]*u_support_batch.view(self.BS*self.K, -1)).sum(dim=1) == u_batch.view(-1)))
+            assert(torch.all((self.f_model.support[None]*z_support_batch.view(self.BS*self.K, -1)).sum(dim=1) == z_batch.view(-1)))
+
+
             # Optimize
             self.optimizer.zero_grad()
             P_batches, v_batches, r_batches, p_vals = self.muZero.forward(S_batch, a_batch, z_batch)
             loss, r_loss, v_loss, P_loss = self.criterion(u_support_batch, r_batches,
                                                           z_support_batch, v_batches,
                                                           pi_batch, P_batches,
-                                                          P_imp, N_count, self.beta)
+                                                          P_imp, N_count, self.beta, self.muZero.n_updates)
             loss.backward()
             self.optimizer.step()
             self.scheduler.step()
+            self.muZero.n_updates += 1
 
             self.ER.update_weightings(p_vals.mean(axis=1), batch_idx)
 
@@ -228,19 +235,30 @@ class model_trainer:
                 for k in range(1, self.K):
                     self.wr_Q.put(['scalar', 'oracle/r' + str(k+1), torch.max(torch.abs(S_batch[:, -1, 0, 0, 0] + k - u_batch[:, k])).detach().cpu(),
                      self.training_counter])
-                """
+                
+                
                 test = (S_batch[:, 0, 0, 0] % 2).to(torch.long)
                 best_val = pi_batch[range(test.shape[0]), 0, test]
                 self.wr_Q.put(['scalar', 'stats/mean_best_act', best_val.mean().detach().cpu(), self.training_counter])
                 self.wr_Q.put(['scalar', 'stats/var_best_act', best_val.var().detach().cpu(), self.training_counter])
-                best_val = P_batches[range(test.shape[0]), 0, test]
+                best_val = P_batches[range(test.shape[0]), 0, test].exp()
                 self.wr_Q.put(['scalar', 'stats/mean_best_pred', best_val.mean().detach().cpu(), self.training_counter])
                 self.wr_Q.put(['scalar', 'stats/var_best_pred', best_val.var().detach().cpu(), self.training_counter])
-
+                """
                 # Log summary statistics
                 self.wr_Q.put(['dist', 'Output/v', v_batches.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Output/P', P_batches.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Output/r', r_batches.detach().cpu(), self.training_counter])
+                r_trans = (self.g_model.support[None]*u_support_batch.view(self.BS*self.K, -1)).sum(dim=1)
+                v_trans = (self.f_model.support[None]*z_support_batch.view(self.BS*self.K, -1)).sum(dim=1)
+                self.wr_Q.put(['dist', 'Output/transformed_r', r_trans.detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'Output/transformed_v', v_trans.detach().cpu(), self.training_counter])
+                # Check for biases of actions
+                self.wr_Q.put(['scalar', 'stats/action0_pref', P_batches[:, :, 0].exp().mean().detach().cpu(),
+                               self.training_counter])
+                self.wr_Q.put(['scalar', 'stats/action0_play', (a_batch == 0).to(torch.float).mean().detach().cpu(),
+                               self.training_counter])
+
 
                 self.wr_Q.put(['dist', 'data/u', u_batch.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'data/z', z_batch.detach().cpu(), self.training_counter])

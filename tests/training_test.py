@@ -4,7 +4,7 @@ import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 from torch.multiprocessing import Queue, Process
 from training_functions import model_trainer, writer_worker
-from go_model import ResNet, ConvResNet, ResNetBasicBlock
+from go_model import ResNet, ConvResNet, ResNetBasicBlock, ResNet_g
 
 import torch.nn as nn
 from functools import partial
@@ -13,22 +13,34 @@ import numpy as np
 import torch.nn.functional as F
 from resnet_model import ResNet
 from torchvision.models.resnet import BasicBlock
-from models import identity_networkH, identity_networkF, identity_networkG
+from models import identity_networkH, identity_networkF, dummy_networkF, dummy_networkH
 
 
 if __name__ == '__main__':
+    MuZero_settings = {"N_training_games": 200000,  # Total number of games to run pr. training loop
+                       "temp_switch": 16,  # Number of turns before other temperature measure is used
+                       "eta_par": 0.03,  # Distributional value for action selection
+                       "epsilon": 0.25,  # Distributional value for action selection
+                       "save_image": False,  # Save image of environment when MCT is saved
+                       "low_support": -50,  # Lowest value of supported values for reward and value head
+                       "high_support": 400,  # Highest value of supported values for reward and value head
+                       "n_support": 451,
+                       # Number of support values. To include a value for 0 keep the number of heads odd
+                       }
+
     MCTS_settings = {"n_parallel_explorations": 4,  # Number of pseudo-parrallel runs of the MCTS, note >16 reduces accuracy significantly
                      "action_size": (4,),  # size of action space
+                     "observation_size": (2, 2),  # shape of observation space
                      "hidden_S_size": (3, 3),  # Size of the hidden state
-                     "observation_size": (3,3),  # shape of observation space
+                     "hidden_S_channel": 1,  # Size of the hidden state
                      "gamma": 0.1}  # parameter for pUCT selection
 
     # Settings for experience replay and storing of values in general
-    experience_settings = {"history_size": 256+1,  # The number of sequences of frames to store in memory
+    experience_settings = {"history_size": 500,  # The number of sequences of frames to store in memory
                         "sequence_length": 1000,  # The number of frames in each sequence
                         "n_bootstrap": 1,  # Number of steps forward to bootstrap from
-                        "past_obs": 6,
-                        "K": 3  # Number of steps to unroll during training. Needed here to determine delay of sending
+                        "past_obs": 1,
+                        "K": 10  # Number of steps to unroll during training. Needed here to determine delay of sending
                        }
     training_settings = {"train_batch_size": 256,  # Batch size on GPU during training
                          "num_epochs": 1000,
@@ -58,7 +70,7 @@ if __name__ == '__main__':
     EX_server = experience_replay_server(ex_Q, experience_settings, MCTS_settings)
     EX_sender = experience_replay_sender(ex_Q, 1, gamma, experience_settings)
 
-    N_episodes = 10
+    N_episodes = 10**3
     max_episode_len = 100
     total_samples = 0
     # Add samples to experience replay
@@ -90,84 +102,17 @@ if __name__ == '__main__':
     while not ex_Q.empty():
         EX_server.recv_store()
 
-    class h_resnet(nn.Module):
-        def __init__(self):
-            super().__init__()
-            _COMMON_META = {
-                "task": "image_classification",
-                "size": (3, 3),
-                "min_size": (64, 64),
-                "categories": 9,
-            }
-            self.resnet =  ResNet(BasicBlock, [3, 3, 3, 3], inplanes = 1, num_classes = 9)
-
-        def forward(self, x):
-            x = self.resnet(x)
-            x = x.reshape((x.shape[0], 1) + (3,3))
-            return x
-
-    class g_resnet(nn.Module):
-        def __init__(self):
-            super().__init__()
-            _COMMON_META = {
-                "task": "image_classification",
-                "size": (3, 3),
-                "min_size": (64, 64),
-                "categories": 9,
-            }
-            self.resnet =  ResNet(BasicBlock, [3, 3, 3, 3], inplanes = 1, num_classes = 1+9)
-
-        def forward(self, x):
-            x = self.resnet(x)
-            [value, policy] = torch.split(x, [1, 9], dim=1)
-            policy = policy.reshape((policy.shape[0], 1) + (3,3))
-            return policy, value
-
-    class f_resnet(nn.Module):
-        def __init__(self):
-            super().__init__()
-            _COMMON_META = {
-                "task": "image_classification",
-                "size": (3, 3),
-                "min_size": (64, 64),
-                "categories": 9,
-            }
-            self.resnet =  ResNet(BasicBlock, [3, 3, 3, 3], inplanes = 1, num_classes = 1+4)
-
-        def forward(self, x):
-            x = self.resnet(x)
-            [value, policy] = torch.split(x, [1, 4], dim=1)
-            policy = policy.reshape((policy.shape[0],) + MCTS_settings["action_size"])
-            return policy, value
-
-
-
-    hidden_shape = (3,3)
-    """
-    import hiddenlayer as hl
-    
-    transforms = [ hl.transforms.Prune('Constant') ] # Removes Constant nodes from graph.
-    batch = torch.zeros(32,2,2)
-    #inter = h_model.forward(batch)
-    
-    graph = hl.build_graph(f_model, batch, transforms=transforms)
-    graph.theme = hl.graph.THEMES['blue'].copy()
-    graph.save('rnn_hiddenlayer', format='png')
-    """
-    def gradient_clipper(model: nn.Module) -> nn.Module:
-        for parameter in model.parameters():
-            parameter.register_hook(lambda grad: grad * 0)
-        return model
+    hidden_shape = (1,3,3)
 
     torch.multiprocessing.set_start_method('spawn', force=True)
     wr_worker = Process(target=writer_worker, args=(Q_writer,))
     wr_worker.start()
-
-    f_model = identity_networkF((1,3,3), (4,)) # f_resnet()
-    g_model = identity_networkG((5,3,3), (1,3,3)) #  g_resnet() # TwoNet(5, 32, hidden_shape, 1)  # dummy_networkG((5,)+hidden_shape, (1,)+hidden_shape, 64)
-    h_model = identity_networkH((1,3,3), (1,3,3)) #  h_resnet() # identity_networkH((1,3,3), (1,3,3))
+    n_heads = MuZero_settings["n_support"]
+    support = torch.linspace(MuZero_settings["low_support"], MuZero_settings["high_support"], n_heads)
+    f_model = dummy_networkF(hidden_shape, action_size, 256, support)
+    g_model = ResNet_g(5, 256, MCTS_settings["hidden_S_size"], MCTS_settings["hidden_S_channel"], 2304, support)
+    h_model = dummy_networkH((experience_settings["past_obs"],) + MCTS_settings["observation_size"], hidden_shape, 256)
     trainer = model_trainer(f_model, g_model, h_model, EX_server, experience_settings, training_settings, MCTS_settings)
-    g_model = gradient_clipper(g_model)
     # GPU things
     cuda = torch.cuda.is_available()
     device = torch.device("cuda:0" if cuda else "cpu")
@@ -179,8 +124,18 @@ if __name__ == '__main__':
         f_model.to(device)
         g_model.to(device)
         h_model.to(device)
-
-    trainer.train()
-
+    print("begin fetching")
+    time_start = time.time()
+    for i in range(100):
+        print(i)
+        EX_server.return_batches(4096,
+                               1,
+                               10,
+                               uniform_sampling=False)
+    time_end = time.time()
+    duration = time_end - time_start
+    print("Iterations pr. sec:" + str(round(100 / duration)))
+    #trainer.train()
+    wr_worker.terminate()
 
 

@@ -1,6 +1,9 @@
 import numpy as np
 from collections import deque, defaultdict
 from torch.multiprocessing import Queue
+from line_profiler_pycharm import profile
+
+
 class experience_replay_server:
     def __init__(self, ex_Q, experience_settings, MCTS_settings):
         self.hist_size = experience_settings["history_size"]  # The number of sequences of frames to store in memory
@@ -81,6 +84,7 @@ class experience_replay_server:
         self.P_replace_idx = (self.P_replace_idx + 1) % self.hist_size  # sequence to next replace
         self.total_store += val_len # Update number of stored total
 
+    @profile
     def return_batches(self, batch_size, alpha, K, uniform_sampling=False):
         # Return batch_size samples sampled via prioritized sampling with parameter alpha.
         # K is the number of unrolling steps. Priorizied sampling can be converted to uniform sampling
@@ -110,6 +114,9 @@ class experience_replay_server:
 
         # Select index of batches
         batch_idx = np.random.choice(self.hist_size * self.seq_size, size=batch_size, p=P_temp, replace=True)  # Very slow
+        S_batch, a_batch, r_batch, done_batch, pi_batch, z_batch = self.batch_sample(batch_idx, K)
+
+        """
         # Get values from batches
         S_batch = []
         a_batch = []
@@ -144,58 +151,51 @@ class experience_replay_server:
         done_batch = np.stack(done_batch)
         pi_batch = np.stack(pi_batch)
         z_batch = np.stack(z_batch)
+        """
         return S_batch, a_batch, r_batch, done_batch, pi_batch, z_batch, batch_idx, self.P[batch_idx]/P_sum, int(N_count)
 
     def update_weightings(self, new_weightings, indexes):
         self.P[indexes] = new_weightings
 
-    """
     def batch_sample(self, batch_idx, K):
+        batch_size = len(batch_idx)
+
         hist_idx = batch_idx // self.seq_size
         seq_idx = self.past_obs - 1 + (batch_idx % self.seq_size)
         seq_idx_end = seq_idx + K
+        undershoot = seq_idx + 1 - self.past_obs  # Case where past frames goes back to previous block (not happening currently)
         sequences = self.storage[hist_idx]
 
         S_batch = []
-        a_batch = []
-        r_batch = []
-        done_batch = []
-        pi_batch = []
-        z_batch = []
 
-        for seq in sequences:
-            S_array, a_array, r_array, done_array, v_array, pi_array, z_array = seq
+        # # Pre-fill array with boundry conditions
+        a_batch = np.random.randint(0, self.n_actions, size=(batch_size, K))
+        r_batch = np.zeros((batch_size, K), dtype=np.float32)
+        done_batch = np.ones((batch_size, K))
+        # Action density
+        a_dens = 1 / self.n_actions  # Predefine for skip having to calc for all values filled in array
+        pi_batch = np.full((batch_size, K, self.n_actions), a_dens, dtype=np.float32)
+        z_batch = np.zeros((batch_size, K), dtype=np.float32)
+
+        S_arrays, a_arrays, r_arrays, done_arrays, v_arrays, pi_arrays, z_arrays = map(list, zip(*sequences))
+        for i in range(len(sequences)):
+            #S_array, a_array, r_array, done_array, v_array, pi_array, z_array = sequences[i]
             # Construct batch
-            a = a_array[seq_idx:seq_idx_end]
-            r = r_array[seq_idx:seq_idx_end]
-            done = done_array[seq_idx:seq_idx_end]
-            pi = pi_array[seq_idx:seq_idx_end]
-            z = z_array[seq_idx:seq_idx_end]
-            undershoot = seq_idx + 1 - self.past_obs  # Case where past frames goes back to previous block
-            S = S_array[undershoot:(seq_idx + 1)]
-            # Pad samples if a value after termination extends into K length
-            pad_length = self.K - len(z)
-            if pad_length != 0:
-                a = np.pad(a, ((0, pad_length), (0, 0)), mode='constant', constant_values=0)
-                r = np.pad(r, (0, pad_length), mode='constant', constant_values=0)
-                done = np.pad(done, (0, pad_length), mode='constant', constant_values=1)
-                pi = np.pad(pi, ((0, pad_length), (0, 0)), mode='constant', constant_values=0)
-                z = np.pad(z, (0, pad_length), mode='constant', constant_values=0)
+            seq_start = seq_idx[i]
+            seq_end = seq_idx_end[i]
+            length = a_arrays[i][seq_start:seq_end].shape[0] # How much of K is before termination
+            a_batch[i, 0:length] = a_arrays[i][seq_start:seq_end]
+            r_batch[i, 0:length] = r_arrays[i][seq_start:seq_end]
+            done_batch[i, 0:length] = done_arrays[i][seq_start:seq_end]
+            pi_batch[i, 0:length] = pi_arrays[i][seq_start:seq_end]
+            z_batch[i, 0:length] = z_arrays[i][seq_start:seq_end]
+            S = S_arrays[i][undershoot[i]:(seq_start + 1)]
             S_batch.append(S)
-            a_batch.append(a)
-            r_batch.append(r)
-            done_batch.append(done)
-            pi_batch.append(pi)
-            z_batch.append(z)
 
         # Stack batches and send. The format is (B, K, object_shape)
         S_batch = np.stack(S_batch)
-        a_batch = np.stack(a_batch)
-        r_batch = np.stack(r_batch)
-        done_batch = np.stack(done_batch)
-        pi_batch = np.stack(pi_batch)
-        z_batch = np.stack(z_batch)
-    """
+        return S_batch, a_batch, r_batch, done_batch, pi_batch, z_batch
+
     def get_sample(self, batch_idx, K):
         # Get values from storage
         hist_idx = batch_idx // self.seq_size

@@ -114,7 +114,7 @@ class dummy_networkF(nn.Module):
 
     def mean_pass(self, x):
         non_mean_val, dist = self.forward(x)
-        mean = (self.support[None]*dist.exp()).mean(dim=1)
+        mean = (self.support[None]*dist.exp()).sum(dim=1)
         return non_mean_val, mean
 
 class constant_networkF(nn.Module):
@@ -299,6 +299,7 @@ class muZero(nn.Module):
         self.K = K
         self.hidden_S_size = hidden_S_size
         self.action_size = action_size
+        self.n_updates = 0
 
     def forward(self, S, a_batch, z_batch):
         p_vals = []  # Number
