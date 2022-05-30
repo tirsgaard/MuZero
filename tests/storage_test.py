@@ -76,7 +76,7 @@ for i_stacks in range(N_rounds // (hist_len*seq_len)):
         assert(np.all(EX_server.storage[i][3] == done_unrolled[start_index:end_index]))
         assert(np.all(EX_server.storage[i][4] == v_unrolled[start_index:end_index]))
         assert(np.all(EX_server.storage[i][5] == pi_unrolled[start_index:end_index]))
-        assert (np.all(EX_server.storage[i][6] == z_unrolled[start_index:end_index]))
+        assert (np.all(np.isclose(EX_server.storage[i][6], z_unrolled[start_index:end_index])))
         # Check if sampling works
         EX_server.return_batches(i+1, 1, K)
 print("Passed correct values for full stack")
@@ -119,7 +119,7 @@ for i in range(N_rounds):
     alpha = np.random.rand()
     result = EX_server.return_batches(batch_size, alpha, K)
 print("Passed returning some batches")
-N_episodes = 10000
+N_episodes = 1000
 max_episode_len = 1000
 
 ex_Q = Queue()

@@ -84,7 +84,6 @@ class experience_replay_server:
         self.P_replace_idx = (self.P_replace_idx + 1) % self.hist_size  # sequence to next replace
         self.total_store += val_len # Update number of stored total
 
-    @profile
     def return_batches(self, batch_size, alpha, K, uniform_sampling=False):
         # Return batch_size samples sampled via prioritized sampling with parameter alpha.
         # K is the number of unrolling steps. Priorizied sampling can be converted to uniform sampling
@@ -341,17 +340,22 @@ class experience_replay_sender:
             # Convert all sequences (lists) to array
             message = []
             new_list = []
-
+            n_get = done * (self.seq_len - len(self.list_storage[0]))  # This to not send too many frames when done
+            n_get = n_get if n_get<0 else len(self.list_storage[0])
             n_ele = -(self.K+self.past_obs - 1 - (self.past_obs > 1))
             for obs_type in self.list_storage:
-                message.append(np.stack(obs_type))
+                message.append(np.stack(obs_type[:n_get]))
                 new_list.append(obs_type[n_ele:])  # Add last K points and past obs from last batch
             message.append(self.agent_id)
             self.ex_Q.put(message, True, 0.01)  # Something is wrong if this times out
             # Reset sequence
             self.list_storage = new_list
             if done:
-                self.reset()
+                if n_get < 0:
+                    # Case where not all data could be send in block, so send remaining
+                    self.send(done)
+                else:
+                    self.reset()
 
     def store(self, S, a, r, done, v, pi):
         # Function for storing experiences

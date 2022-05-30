@@ -1,32 +1,28 @@
-from line_profiler_pycharm import profile
 import numpy as np
-from scipy.stats import norm
 import matplotlib.pyplot as plt
-from multiprocessing import Pool
-import itertools
+from multiprocessing import Pool, cpu_count
 from time import time
 from agents import UCB1_agent, UCB1_tuned_agent, UCB1_normal_agent, UCB2_agent, Bays2_agent, Bayes_agent, UCB1_agent_tree, Bays_agent_Gauss_UCT2, Bays_agent_vector_UCT2, Bays_agent_Gauss_beta
-import math
-from simulations import run_simulation, run_simulation_beta, tree_simulation, tree_thread
-import pickle
+from simulations import run_simulation, run_simulation_beta, tree_simulation, tree_thread, explore_tree
 
 
 if __name__ == '__main__':
     np.random.seed(2)
-    n_threads = 4
-    N_rep = n_threads*4  # Number of repeat simulations over parallel workers for reducing variance
+    n_threads = cpu_count()//2-4  # To account for virtual cores
+    N_rep = n_threads*400  # Number of repeat simulations over parallel workers for reducing variance
     n_sim = 5  # Number of in-thread simulations
-    N_data_points = 400  # Number of steps to go
+    N_data_points = 50  # Number of steps to go
 
     n_c_points = 5
-    c_range = 10**(np.linspace(-1, 1, n_c_points))
+    c_range = 10**(np.linspace(-3, 1, n_c_points))
 
-    agent_opt1 = []
-    agent_opt2 = []
-    agent_opt3 = [np.linspace(0, 1, 4000)]
+    agent_opt1 = [np.linspace(0, 1, 4000)]
+    agent_opt2 = [True, 2]
+    agent_opt3 = []
+
     option_list = [agent_opt1, agent_opt2, agent_opt3]
-    labels = ["Gauss", "UCB1", "Vector"]
-    agents = [Bays_agent_Gauss_beta, UCB1_agent, Bays_agent_vector_UCT2]
+    labels = ["Bayes Vector", "Gauss_init", "UCB1"]
+    agents = [Bays_agent_vector_UCT2, Bays_agent_Gauss_beta, UCB1_agent]
 
     n_agents = len(option_list)
     c_optimal_actions = np.zeros((n_c_points, N_rep, N_data_points, n_agents))
@@ -41,9 +37,9 @@ if __name__ == '__main__':
         p = Pool(n_threads)
         c_option_list = []
         for option in option_list:
-            c_option_list.append(option + [c_range[i]])
-        #test = tree_thread(N_data_points, agents, c_option_list)
-        results = p.starmap(tree_thread, iterable=[(N_data_points, agents, c_option_list)] * N_rep)
+            c_option_list.append([c_range[i]] + option)
+        test = explore_tree(N_data_points, agents, c_option_list)
+        results = p.starmap(explore_tree, iterable=[(N_data_points, agents, c_option_list)] * N_rep)
         p.close()
         p.join()
 
@@ -112,7 +108,7 @@ if __name__ == '__main__':
         ax.set_xscale("log")
 
 
-    levels = [range(390, 400), range(95, 105), range(15, 25)]
+    levels = [range(45, 49), range(15, 25)]
     # Compare different levels for each agent
     for i in range(n_agents):
         fig, ax = plt.subplots(2, 3)
@@ -127,8 +123,10 @@ if __name__ == '__main__':
         plot(ax3, c_regret_second_arrays[:, :, :, i], labels[i], "Regret top-level decision", levels, log_y=True)
         plot(ax4, c_greedy_arrays[:, :, :, i], labels[i], "Greedy reward", levels, log_y=True)
         plot(ax5, c_top_bias_arrays[:, :, :, i], labels[i], "Greedy top reward bias", levels, log_y=False)
-        plt.savefig("results_" + labels[i] + ".png")
-        plt.show()
+        fig.set_figheight(8)
+        fig.set_figwidth(15)
+        plt.savefig("results_" + labels[i] + ".pdf")
+        #plt.show()
 
     # Compare each agent at different level
     for ranges in levels:
@@ -144,5 +142,8 @@ if __name__ == '__main__':
         compare_plot(ax3, c_regret_second_arrays, "Regret top-level decision", ranges, log_y=True)
         compare_plot(ax4, c_greedy_arrays, "Greedy reward", ranges, log_y=False)
         compare_plot(ax5, c_top_bias_arrays, "Greedy top reward bias", ranges, log_y=False)
-        plt.savefig("results_compare_" + str(ranges[0]) +"-" + str(ranges[-1]) + ".png")
-        plt.show()
+
+        fig.set_figheight(8)
+        fig.set_figwidth(15)
+        plt.savefig("results_compare_" + str(ranges[0]) +"-" + str(ranges[-1]) + ".pdf")
+        #plt.show()

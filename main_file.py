@@ -31,7 +31,7 @@ if __name__ == '__main__':
     MCTS_settings = conf.MCTS_settings
     training_settings = conf.training_settings
     # Construct networks
-    hidden_shape = (1, ) + MCTS_settings["hidden_S_size"]
+    hidden_shape = (MCTS_settings["hidden_S_channel"], ) + MCTS_settings["hidden_S_size"]
     action_size = MCTS_settings["action_size"]
     hidden_input_size = (MCTS_settings["action_size"][0] + 1,) + MCTS_settings["hidden_S_size"]
     n_heads = MuZero_settings["n_support"]
@@ -39,8 +39,13 @@ if __name__ == '__main__':
     np.random.seed(1)
 
     support = torch.linspace(MuZero_settings["low_support"], MuZero_settings["high_support"], n_heads)
-    f_model = dummy_networkF(hidden_shape, action_size, 256,  support)
-    g_model = ResNet_g(3, 256, MCTS_settings["hidden_S_size"], MCTS_settings["hidden_S_channel"], 2304, support)
+    f_model = dummy_networkF(hidden_shape, action_size, 256,
+                             support)  # half_oracleF(hidden_shape, action_size, 32)  #oracleF() #constant_networkF(hidden_shape, action_size,
+    # 32)  # Model for predicting value (v) and policy (p)
+    # (self, in_channels, filter_size, policy_output_shape, output_channel, value_size
+    g_model = ResNet_g(2 + MCTS_settings["hidden_S_channel"], 256, MCTS_settings["hidden_S_size"],
+                       MCTS_settings["hidden_S_channel"], 4096,
+                       support)  # half_oracleG((3,3,3), 32) #oracleG() #dummy_networkG(hidden_input_size, hidden_shape, 32)  # Model for predicting hidden state (S)
     h_model = dummy_networkH((experience_settings["past_obs"],) + MCTS_settings["observation_size"], hidden_shape, 256)
 
 
@@ -71,15 +76,22 @@ if __name__ == '__main__':
     class RewardWrapper(gym.RewardWrapper):
         def __init__(self, env):
             super().__init__(env)
-            self.iters = 0
 
         def reward(self, rew):
             # modify rew
-            rew = rew * (self.iters % 2)
-            self.iters += 1
-            return rew
+            return np.float32(rew)
 
-    env_maker = lambda: binTestEnv()#RewardWrapper(gym.make("CartPole-v1"))
+
+    class ObservationWrapper(gym.ObservationWrapper):
+        def __init__(self, env):
+            super().__init__(env)
+            self.env = env
+
+        def observation(self, obs):
+            # modify rew
+            return obs.reshape((1, 2, 2)).astype(np.float32)
+
+    env_maker = lambda: ObservationWrapper(RewardWrapper(RewardWrapper(gym.make("CartPole-v1"))))
 
     # Construct model trainer and experience storage
     torch.multiprocessing.set_start_method('spawn', force=True)

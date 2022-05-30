@@ -52,7 +52,7 @@ def generate_root(S_obs, h_Q, f_g_Q, h_send, h_rec, f_g_send, f_g_rec, MCTS_sett
     root_node = state_node(MCTS_settings["action_size"], 0)
     h_Q.put([S_obs[None], h_send])  # Get hidden state of observation
     S, P, v = h_rec.recv()
-    root_node.explore(S[0], P, 0, v)
+    root_node.explore(S[0], P[0], 0, v)
     return root_node
 
 
