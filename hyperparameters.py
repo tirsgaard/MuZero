@@ -12,17 +12,18 @@ MuZero_settings = {"N_training_games": 200000,  # Total number of games to run p
 
 # Settings for experience replay and storing of values in general
 experience_settings = {"history_size": 10**4,  # The number of sequences of frames to store in memory
-                        "sequence_length": 30,  # The number of frames in each sequence
+                        "sequence_length": 200,  # The number of frames in each sequence
                         "epsilon": 0.25,  # Distributional value for action selection
                         "n_bootstrap": 10,  # Number of steps forward to bootstrap from
-                        "past_obs": 1,  # Number of past observations to stack. Original Atari was 32
+                        "past_obs": 4,  # Number of past observations to stack. Original Atari was 32
                         "K": 10  # Number of steps to unroll during training. Needed here to determine delay of sending
                    }
 
 # These are the settings for the Monte Carlo Tree Search (MCTS),
 MCTS_settings = {"n_parallel_explorations": 1,  # Number of pseudo-parrallel runs of the MCTS, note >16 reduces accuracy significantly
                  "action_size": (2,),  # size of action space
-                 "observation_size": (2, 2),  # shape of observation space
+                 "observation_size": (90, 90),  # size of observation space
+                 "observation_channels": 3*4,  # number of channels of observation space (i.e. 3*4 for RGB and 4x frame stack)
                  "hidden_S_size": (4, 4),  # Size of the hidden state
                  "hidden_S_channel": 4,  # Size of the hidden state
                  "virtual_loss": 3,  # Magnitude of loss during parallel explorations

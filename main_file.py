@@ -9,12 +9,11 @@ Created on Sat Nov 23 16:44:33 2019
 
 #from go_model import ResNet, ResNetBasicBlock
 from game_functions import sim_games
-from training_functions import save_model, load_latest_model, model_trainer, train_ex_worker, writer_worker
-from torch.multiprocessing import Process, Queue, Pipe, Value, Lock, Manager, Pool, SimpleQueue
-from storage_functions import experience_replay_server
+from training_functions import train_ex_worker, writer_worker
+from torch.multiprocessing import Process, Queue
 from models import dummy_networkF, dummy_networkG, dummy_networkH
-from models_binary import oracleG, oracleH, half_oracleF, half_oracleG
-from go_model import ResNet_g
+from wrappers import MaxAndSkipEnv
+from go_model import ResNet_g, ResNet_f, ResNet_h
 import gym
 import hyperparameters as conf
 from test_env import binTestEnv
@@ -31,22 +30,24 @@ if __name__ == '__main__':
     MCTS_settings = conf.MCTS_settings
     training_settings = conf.training_settings
     # Construct networks
-    hidden_shape = (MCTS_settings["hidden_S_channel"], ) + MCTS_settings["hidden_S_size"]
+    observation_shape = (experience_settings["past_obs"]*MCTS_settings["observation_channels"],) + MCTS_settings["observation_size"]  # input to f
+    hidden_shape = (MCTS_settings["hidden_S_channel"], ) + MCTS_settings["hidden_S_size"]  # input to f
     action_size = MCTS_settings["action_size"]
-    hidden_input_size = (MCTS_settings["action_size"][0] + 1,) + MCTS_settings["hidden_S_size"]
+    hidden_input_size = (MCTS_settings["action_size"][0] + MCTS_settings["hidden_S_channel"],) + MCTS_settings["hidden_S_size"]  # Input to g
     n_heads = MuZero_settings["n_support"]
     torch.manual_seed(0)
     np.random.seed(1)
 
     support = torch.linspace(MuZero_settings["low_support"], MuZero_settings["high_support"], n_heads)
-    f_model = dummy_networkF(hidden_shape, action_size, 256,
-                             support)  # half_oracleF(hidden_shape, action_size, 32)  #oracleF() #constant_networkF(hidden_shape, action_size,
-    # 32)  # Model for predicting value (v) and policy (p)
-    # (self, in_channels, filter_size, policy_output_shape, output_channel, value_size
-    g_model = ResNet_g(2 + MCTS_settings["hidden_S_channel"], 256, MCTS_settings["hidden_S_size"],
+    f_model = ResNet_f(hidden_shape[0], 256, action_size, 32, 4096, support)
+    #in_channels, filter_size, policy_output_shape, output_shape, support
+        #dummy_networkF(hidden_shape, action_size, 256, support)
+
+    g_model = ResNet_g(hidden_input_size[0], 256, MCTS_settings["hidden_S_size"],
                        MCTS_settings["hidden_S_channel"], 4096,
                        support)  # half_oracleG((3,3,3), 32) #oracleG() #dummy_networkG(hidden_input_size, hidden_shape, 32)  # Model for predicting hidden state (S)
-    h_model = dummy_networkH((experience_settings["past_obs"],) + MCTS_settings["observation_size"], hidden_shape, 256)
+    h_model = ResNet_h(observation_shape[0], 256, 16200, hidden_shape)
+        #dummy_networkH(observation_shape, hidden_shape, 256)
 
 
     #h_model = ConvResNet(experience_settings["past_obs"], MCTS_settings["hidden_S_channel"], hidden_shape)  # identity_networkH((1, 2, 2), hidden_shape)
@@ -72,26 +73,7 @@ if __name__ == '__main__':
     g_model.share_memory()
     h_model.share_memory()
 
-    # Function for creating environment. Needs to create seperate env for each worker
-    class RewardWrapper(gym.RewardWrapper):
-        def __init__(self, env):
-            super().__init__(env)
-
-        def reward(self, rew):
-            # modify rew
-            return np.float32(rew)
-
-
-    class ObservationWrapper(gym.ObservationWrapper):
-        def __init__(self, env):
-            super().__init__(env)
-            self.env = env
-
-        def observation(self, obs):
-            # modify rew
-            return obs.reshape((1, 2, 2)).astype(np.float32)
-
-    env_maker = lambda: ObservationWrapper(RewardWrapper(RewardWrapper(gym.make("CartPole-v1"))))
+    env_maker = lambda: MaxAndSkipEnv(gym.make("ALE/Breakout-v5"))
 
     # Construct model trainer and experience storage
     torch.multiprocessing.set_start_method('spawn', force=True)

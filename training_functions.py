@@ -210,41 +210,6 @@ class model_trainer:
 
             # Log summary statistics
             if self.training_counter % 100 == 1:
-                """
-                z_loss = 0
-                n_boot = self.experience_settings["n_bootstrap"]
-                gamma = self.MCTS_settings["gamma"]
-                for j in range(self.BS):
-                    done_mask = done_batch[j].detach().cpu()
-                    done_mask[np.argmax(done_mask)] = 0  # Set the first encountered done value to be 0
-                    for k in range(self.K-n_boot):  # This is the interval done values can be reasoned
-                        # Prepare done tiling
-                        mask = torch.ones(n_boot)  # +1 to take bootstrap value into account
-                        mask[:(self.K-k)] = done_mask[k:(k + n_boot)]
-                        mask = torch.abs(1-mask)  # Invert mask
-                        v_vals = torch.arange(u_batch[j, k], u_batch[j, k]+n_boot)
-                        v_vals = v_vals * mask  # Remove done values
-                        v_vals = torch.sum(v_vals*(gamma**torch.arange(0, n_boot)))
-                        v_vals += mask[-1] * (S_batch[j, -1, 0, 0, 0] + k + n_boot-1) * gamma**n_boot
-                        z_loss = max(torch.abs(v_vals-z_batch[j, k]), z_loss)
-
-                self.wr_Q.put(['scalar', 'oracle/max_v_loss', z_loss.detach().cpu(),
-                               self.training_counter])
-                
-                self.wr_Q.put(['scalar', 'oracle/r', torch.max(torch.abs(S_batch[:, -1, 0, 0, 0] - u_batch[:, 0])).detach().cpu(), self.training_counter])
-                for k in range(1, self.K):
-                    self.wr_Q.put(['scalar', 'oracle/r' + str(k+1), torch.max(torch.abs(S_batch[:, -1, 0, 0, 0] + k - u_batch[:, k])).detach().cpu(),
-                     self.training_counter])
-                
-                
-                test = (S_batch[:, 0, 0, 0] % 2).to(torch.long)
-                best_val = pi_batch[range(test.shape[0]), 0, test]
-                self.wr_Q.put(['scalar', 'stats/mean_best_act', best_val.mean().detach().cpu(), self.training_counter])
-                self.wr_Q.put(['scalar', 'stats/var_best_act', best_val.var().detach().cpu(), self.training_counter])
-                best_val = P_batches[range(test.shape[0]), 0, test].exp()
-                self.wr_Q.put(['scalar', 'stats/mean_best_pred', best_val.mean().detach().cpu(), self.training_counter])
-                self.wr_Q.put(['scalar', 'stats/var_best_pred', best_val.var().detach().cpu(), self.training_counter])
-                """
                 # Log summary statistics
                 self.wr_Q.put(['dist', 'Output/v', v_batches.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Output/P', P_batches.detach().cpu(), self.training_counter])

@@ -307,7 +307,7 @@ class muZero(nn.Module):
         v_batches = []
         P_batches = []
 
-        new_S = self.h_model.forward(S[:, -1])  # Only the most recent of the unrolled observations are used
+        new_S = self.h_model.forward(S)  # Only the most recent of the unrolled observations are used
         for k in range(self.K):
             P_batch, v_batch = self.f_model.forward(new_S)
             Sa_batch = stack_a_torch(new_S, a_batch[:, k], self.hidden_S_size, self.action_size)

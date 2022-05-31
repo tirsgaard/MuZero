@@ -1,7 +1,6 @@
 import numpy as np
 from collections import deque, defaultdict
 from torch.multiprocessing import Queue
-from line_profiler_pycharm import profile
 
 
 class experience_replay_server:
@@ -189,7 +188,7 @@ class experience_replay_server:
             pi_batch[i, 0:length] = pi_arrays[i][seq_start:seq_end]
             z_batch[i, 0:length] = z_arrays[i][seq_start:seq_end]
             S = S_arrays[i][undershoot[i]:(seq_start + 1)]
-            S_batch.append(S)
+            S_batch.append(S.reshape((-1,) + self.obs_size))
 
         # Stack batches and send. The format is (B, K, object_shape)
         S_batch = np.stack(S_batch)
@@ -412,5 +411,5 @@ class frame_stacker:
         # Add observation
         self.frames.append(F)
         # Stack frames to numpy array and send back
-        S = np.stack(self.frames)
+        S = np.concatenate(self.frames, axis=0)
         return S

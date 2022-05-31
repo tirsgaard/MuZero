@@ -151,13 +151,13 @@ class policyHead(nn.Module):
             nn.Conv2d(filter_size, 2, kernel_size=1, stride=1, padding=0, bias=False),
             nn.BatchNorm2d(2),
             activation_func(activation))
-        self.full_layer = nn.Sequential(nn.Linear(output_size * 2, np.prod(policy_output_shape), bias=True),
+        self.full_layer = nn.Sequential(nn.Linear(output_size, np.prod(policy_output_shape), bias=True),
                                         activation_func(activation), nn.Softmax(dim=1))
 
     def forward(self, x):
         bs = x.shape[0]
         x = self.conv_block(x)
-        x = x.view(bs, self.output_size * 2)
+        x = x.view(bs, self.output_size)
         x = self.full_layer(x)
         x = torch.reshape(x, (bs, ) + self.policy_output_shape)
         return x
@@ -219,17 +219,35 @@ class ConvResNet(nn.Module):
 
 
 class ResNet_f(nn.Module):
-    def __init__(self, in_channels, filter_size, output_size, policy_output_shape, value_size, *args, **kwargs):
+    def __init__(self, in_channels, filter_size, policy_output_shape, policy_intermediate, value_intermediate, support, *args, **kwargs):
         super().__init__()
+        self.support = support
         self.encoder = ResNetEncoder(in_channels, blocks_sizes=[filter_size], *args, **kwargs)
-        self.policyHead = policyHead(filter_size, output_size, policy_output_shape, *args, **kwargs)
-        self.valueHead = valueHead(filter_size, value_size, *args, **kwargs)
+        self.policyHead = policyHead(filter_size, policy_intermediate, policy_output_shape, *args, **kwargs)
+        self.valueHead = valueHead(filter_size, value_intermediate, self.support.shape[0], *args, **kwargs)
+        self.log_softmaxer = nn.LogSoftmax(dim=1)
 
     def forward(self, x):
         x = self.encoder(x)
         policy = self.policyHead(x)
-        value = self.valueHead(x)
+        value = self.log_softmaxer(self.valueHead(x))
         return [policy, value]
+
+    def mean_pass(self, x):
+        non_mean_val, dist = self.forward(x)
+        mean = (self.support[None]*dist.exp()).sum(dim=1)
+        return non_mean_val, mean
+
+class ResNet_h(nn.Module):
+    def __init__(self, in_channels, filter_size, output_size, policy_output_shape, *args, **kwargs):
+        super().__init__()
+        self.encoder = ResNetEncoder(in_channels, blocks_sizes=[filter_size], *args, **kwargs)
+        self.policyHead = policyHead(filter_size, output_size, policy_output_shape, *args, **kwargs)
+
+    def forward(self, x):
+        x = self.encoder(x)
+        policy = self.policyHead(x)
+        return policy
 
 class ResNet_oracle_f(nn.Module):
     def __init__(self, in_channels, filter_size, output_size, policy_output_shape, value_size, *args, **kwargs):
