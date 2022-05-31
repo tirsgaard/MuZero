@@ -76,4 +76,36 @@ class MaxAndSkipEnv(gym.Wrapper):
         return obs_array
 
 
+class RAMAndSkipEnv(gym.Wrapper):
+    def __init__(self, env, skip=4):
+        super(RAMAndSkipEnv, self).__init__(env)
+        # Initialise a double ended queue that can store a maximum of two states
+        self.skip = skip
+        self.obs_array = np.empty((self.skip, 32, 32), dtype=np.float32)  # 128 bytes -> 1024 bits -> 32*32 values
+
+    def step(self, action):
+        total_reward = 0.0
+        for i in range(self.skip):
+            # Take a step
+            obs, reward, done, info = self.env.step(action)
+            # Append the new state to the double ended queue buffer
+            self.obs_array[i] = np.unpackbits(obs).reshape(32, 32)
+            # Update the total reward by summing the (reward obtained from the step taken) + (the current
+            # total reward)
+            total_reward += reward
+            # If the game ends, break the for loop
+            if done:
+                # Fill remaining images with newest observation
+                for j in range(i+1, self.skip):
+                    self.obs_array[j] = self.obs_array[j - 1]
+                break
+        frames = self.obs_array.astype(np.float32)
+        return frames, total_reward, done, info
+
+    def reset(self):
+        obs = np.unpackbits(self.env.reset()).reshape(32, 32).astype(np.float32)
+        obs_array = np.repeat(obs[None], self.skip, axis=0)
+        return obs_array
+
+
 

@@ -12,7 +12,7 @@ from game_functions import sim_games
 from training_functions import train_ex_worker, writer_worker
 from torch.multiprocessing import Process, Queue
 from models import dummy_networkF, dummy_networkG, dummy_networkH
-from wrappers import MaxAndSkipEnv
+from wrappers import MaxAndSkipEnv, RAMAndSkipEnv
 from go_model import ResNet_g, ResNet_f, ResNet_h
 import gym
 import hyperparameters as conf
@@ -39,14 +39,14 @@ if __name__ == '__main__':
     np.random.seed(1)
 
     support = torch.linspace(MuZero_settings["low_support"], MuZero_settings["high_support"], n_heads)
-    f_model = ResNet_f(hidden_shape[0], 256, action_size, 32, 4096, support)
+    f_model = dummy_networkF(hidden_shape, action_size, 256, support)
     #in_channels, filter_size, policy_output_shape, output_shape, support
         #dummy_networkF(hidden_shape, action_size, 256, support)
 
     g_model = ResNet_g(hidden_input_size[0], 256, MCTS_settings["hidden_S_size"],
                        MCTS_settings["hidden_S_channel"], 4096,
                        support)  # half_oracleG((3,3,3), 32) #oracleG() #dummy_networkG(hidden_input_size, hidden_shape, 32)  # Model for predicting hidden state (S)
-    h_model = ResNet_h(observation_shape[0], 256, 16200, hidden_shape)
+    h_model = dummy_networkH(observation_shape, hidden_shape, 256)
         #dummy_networkH(observation_shape, hidden_shape, 256)
 
 
@@ -73,7 +73,7 @@ if __name__ == '__main__':
     g_model.share_memory()
     h_model.share_memory()
 
-    env_maker = lambda: MaxAndSkipEnv(gym.make("ALE/Breakout-v5"))
+    env_maker = lambda: RAMAndSkipEnv(gym.make("ALE/Breakout-v5", full_action_space=False, obs_type="ram"))
 
     # Construct model trainer and experience storage
     torch.multiprocessing.set_start_method('spawn', force=True)
