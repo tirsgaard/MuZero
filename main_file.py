@@ -35,17 +35,18 @@ if __name__ == '__main__':
     action_size = MCTS_settings["action_size"]
     hidden_input_size = (MCTS_settings["action_size"][0] + MCTS_settings["hidden_S_channel"],) + MCTS_settings["hidden_S_size"]  # Input to g
     n_heads = MuZero_settings["n_support"]
+    transform_values = training_settings["scale_values"]
     torch.manual_seed(0)
     np.random.seed(1)
 
     support = torch.linspace(MuZero_settings["low_support"], MuZero_settings["high_support"], n_heads)
-    f_model = dummy_networkF(hidden_shape, action_size, 256, support)
+    f_model = dummy_networkF(hidden_shape, action_size, 256, support, transform_values)
     #in_channels, filter_size, policy_output_shape, output_shape, support
         #dummy_networkF(hidden_shape, action_size, 256, support)
 
     g_model = ResNet_g(hidden_input_size[0], 256, MCTS_settings["hidden_S_size"],
                        MCTS_settings["hidden_S_channel"], 4096,
-                       support)  # half_oracleG((3,3,3), 32) #oracleG() #dummy_networkG(hidden_input_size, hidden_shape, 32)  # Model for predicting hidden state (S)
+                       support, transform_values)  # half_oracleG((3,3,3), 32) #oracleG() #dummy_networkG(hidden_input_size, hidden_shape, 32)  # Model for predicting hidden state (S)
     h_model = dummy_networkH(observation_shape, hidden_shape, 256)
         #dummy_networkH(observation_shape, hidden_shape, 256)
 

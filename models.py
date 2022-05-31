@@ -83,12 +83,13 @@ class dummy_networkH(nn.Module):
 
 
 class dummy_networkF(nn.Module):
-    def __init__(self, input_shape, output1_shape, hidden_size, support):
+    def __init__(self, input_shape, output1_shape, hidden_size, support, transform=True):
         super(dummy_networkF, self).__init__()
         self.input_shape = input_shape
         self.output1_shape = output1_shape
         self.hidden_size = hidden_size
         self.support = support
+        self.transform = transform
         self.train_count = 0
         # Policy head
         self.layer1_1 = nn.Linear(np.prod(input_shape), self.hidden_size)
@@ -115,6 +116,8 @@ class dummy_networkF(nn.Module):
     def mean_pass(self, x):
         non_mean_val, dist = self.forward(x)
         mean = (self.support[None]*dist.exp()).sum(dim=1)
+        if self.transform:
+            mean = h_inverse_scale(mean)
         return non_mean_val, mean
 
 class constant_networkF(nn.Module):
@@ -348,7 +351,9 @@ def nearest_supports(input, support):
     highest = lowest + 1
     return lowest, highest
 
-def calc_support_dist(input, support):
+def calc_support_dist(input, support, scale_value = True):
+    if scale_value:
+        input = h_scale(input.clone())
     n_supp = support.shape[0]
     n_samples = input.shape[0]*input.shape[1]
     lowest, highest = nearest_supports(input, support)
@@ -358,7 +363,7 @@ def calc_support_dist(input, support):
     lowest_p = (input - high_val) / (low_val - high_val)
     support_dist.view(-1, n_supp)[range(n_samples), lowest.view(-1)] = lowest_p.view(-1)  # There must be an easier way to index
     support_dist.view(-1, n_supp)[range(n_samples), highest.view(-1)] = 1 - lowest_p.view(-1)
-    return support_dist
+    return support_dist, input
 
 
 

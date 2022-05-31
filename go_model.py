@@ -2,6 +2,7 @@ import torch.nn as nn
 from functools import partial
 import torch
 import numpy as np
+from models import h_inverse_scale
 
 class Conv2dAuto(nn.Conv2d):
     def __init__(self, *args, **kwargs):
@@ -285,9 +286,10 @@ class StateHead(nn.Module):
 
 
 class ResNet_g(nn.Module):
-    def __init__(self, in_channels, filter_size, policy_output_shape, output_channel, output_shape, support, *args, **kwargs):
+    def __init__(self, in_channels, filter_size, policy_output_shape, output_channel, output_shape, support, transform=True, *args, **kwargs):
         super().__init__()
         self.support = support
+        self.transform = transform
         self.encoder = ResNetEncoder(in_channels, blocks_sizes=[filter_size], *args, **kwargs)
         self.StateHead = StateHead(filter_size, filter_size, policy_output_shape, output_channel, *args, **kwargs)
         self.valueHead = valueHead(filter_size, output_shape, self.support.shape[0], *args, **kwargs)
@@ -302,5 +304,7 @@ class ResNet_g(nn.Module):
     def mean_pass(self, x):
         non_mean_val, dist = self.forward(x)
         mean = (self.support[None]*dist.exp()).sum(dim=1)
+        if self.transform:
+            mean = h_inverse_scale(mean)
         return non_mean_val, mean
 

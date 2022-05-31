@@ -142,6 +142,7 @@ class model_trainer:
         self.momentum = training_settings["momentum"]
         self.weight_decay = training_settings["weight_decay"]
         self.uniform_sampling = training_settings["uniform_sampling"]
+        self.scale_values = training_settings["scale_values"]
         self.hidden_S_size = MCTS_settings["hidden_S_size"]
         self.action_size = MCTS_settings["action_size"]
         self.wr_Q = MCTS_settings["Q_writer"]
@@ -185,13 +186,13 @@ class model_trainer:
                                                                                                             self.K,
                                                                                                             uniform_sampling=self.uniform_sampling)
             S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp = self.convert_torch([S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp])
-            u_support_batch = calc_support_dist(u_batch, self.g_model.support)
-            z_support_batch = calc_support_dist(z_batch, self.f_model.support)
+            u_support_batch, u_scaled = calc_support_dist(u_batch, self.g_model.support, scale_value=self.scale_values)
+            z_support_batch, z_scaled = calc_support_dist(z_batch, self.f_model.support, scale_value=self.scale_values)
             assert(torch.all(pi_batch.sum(dim=2) == 1.))
             assert(torch.all(u_support_batch.sum(dim=2) == 1.))
             assert(torch.all(z_support_batch.sum(dim=2) == 1.))
-            assert(torch.all((self.g_model.support[None]*u_support_batch.view(self.BS*self.K, -1)).sum(dim=1) == u_batch.view(-1)))
-            assert(torch.all((self.f_model.support[None]*z_support_batch.view(self.BS*self.K, -1)).sum(dim=1) == z_batch.view(-1)))
+            assert(torch.all(torch.isclose((self.g_model.support[None]*u_support_batch.view(self.BS*self.K, -1)).sum(dim=1), u_scaled.view(-1), atol=1e-06)))
+            assert(torch.all(torch.isclose((self.f_model.support[None]*z_support_batch.view(self.BS*self.K, -1)).sum(dim=1), z_scaled.view(-1), atol=1e-06)))
 
 
             # Optimize
