@@ -409,6 +409,8 @@ class Bays_agent_Gauss_beta:
             self.criterion = self.muZero
         elif self.context == "alphaGo":
             self.criterion = self.alphaGo
+        elif self.context == "thompson":
+            self.criterion = self.thompson
         else:
             raise("Criterion not found")
 
@@ -503,6 +505,10 @@ class Bays_agent_Gauss_beta:
         a = np.argmax(self.Q + c * self.P * m, axis=0)
         return a
 
+    def thompson(self):
+        a = np.argmax(np.random.normal(self.Q, np.sqrt(self.Sigmas)),  axis=0)
+        return a
+
     def muZero(self):
         c_1 = 1.25
         c_2 = 19652
@@ -517,7 +523,7 @@ class Bays_agent_Gauss_beta:
         return self.criterion()
 
     def get_greedy_action(self):
-        if (self.context == "no_context") or (self.context == "alphaGo"):
+        if (self.context == "no_context") or (self.context == "alphaGo") or (self.context == "thompson"):
             a = np.argmax(self.Q)
         elif self.context == "context" or self.context == "PUCT_context":
             t = self.i + 1  # This is 1 indexed

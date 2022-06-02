@@ -5,9 +5,9 @@ MuZero_settings = {"N_training_games": 200000,  # Total number of games to run p
                     "eta_par": 0.03,  # Distributional value for action selection
                     "epsilon": 0.25,  # Distributional value for action selection
                    "save_image": False,  # Save image of environment when MCT is saved
-                   "low_support": -50,  # Lowest value of supported values for reward and value head
-                   "high_support": 500,  # Highest value of supported values for reward and value head
-                   "n_support": 551,  # Number of support values. To include a value for 0 keep the number of heads odd
+                   "low_support": -300,  # Lowest value of supported values for reward and value head
+                   "high_support": 300,  # Highest value of supported values for reward and value head
+                   "n_support": 601,  # Number of support values. To include a value for 0 keep the number of heads odd
                    }
 
 # Settings for experience replay and storing of values in general
@@ -28,10 +28,10 @@ MCTS_settings = {"n_parallel_explorations": 1,  # Number of pseudo-parrallel run
                  "hidden_S_channel": 4,  # Size of the hidden state
                  "virtual_loss": 3,  # Magnitude of loss during parallel explorations
                  "number_of_threads": 2,  # Number of games / threads to run on CPU
-                 "N_MCTS_sim": 20,  # Number of MCTS simulations for each action
+                 "N_MCTS_sim": 50,  # Number of MCTS simulations for each action
                  "c1": 1.25,  # parameter for pUCT selection
                  "c2": 19652,
-                 "gamma": 1,
+                 "gamma": 0.997,
                  "min_val": None,
                  "max_val": None,
                 }  # parameter reinforcement learning

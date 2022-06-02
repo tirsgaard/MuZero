@@ -9,21 +9,18 @@ from simulations import run_simulation, run_simulation_beta, tree_simulation, tr
 if __name__ == '__main__':
     np.random.seed(2)
     n_threads = 4
-    N_rep = n_threads*40  # Number of repeat simulations over parallel workers for reducing variance
+    N_rep = n_threads*400  # Number of repeat simulations over parallel workers for reducing variance
     n_sim = 5  # Number of in-thread simulations
-    N_data_points = 300  # Number of steps to go
-    noise = 0.2
-    agent_opt1 = [2, "PUCB", 1, noise]
-    agent_opt2 = [2, "alphaZero", 1, noise]
-    agent_opt3 = [2, "MuZero", 1, noise]
-    agent_opt4 = [2, True, "muzero_context", 1, noise]
-    agent_opt5 = [2, True, "PUCT_context", 1, noise]
-    agent_opt6 = [2, False, "PUCT_context", 1, noise]
+    N_data_points = 200  # Number of steps to go
+    noise = 0.4
+    agent_opt1 = [2, "UCB1", 1, noise]
+    agent_opt2 = [2, True, "thompson", 1, noise]
+    agent_opt3 = [2, True, "no_context", 1, noise]
     #agent_opt6 = [2, True, "alphaGo", 1, noise]
 
-    option_list = [agent_opt1, agent_opt2, agent_opt3, agent_opt4, agent_opt5, agent_opt6]
-    labels = ["PUCB", "alphaZero", "MuZero", "Bayes MuZero", "Bayes PUCT True", "Bayes PUCT False"]
-    agents = [UCB1_agent, UCB1_agent, UCB1_agent, Bays_agent_Gauss_beta, Bays_agent_Gauss_beta, Bays_agent_Gauss_beta]
+    option_list = [agent_opt1, agent_opt2, agent_opt3]
+    labels = ["UCB1", "thompson", "Bayes UCB1"]
+    agents = [UCB1_agent, Bays_agent_Gauss_beta, Bays_agent_Gauss_beta]
 
     t = time()
 
