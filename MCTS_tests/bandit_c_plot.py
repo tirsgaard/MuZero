@@ -8,21 +8,23 @@ from simulations import run_simulation, run_simulation_beta, tree_simulation, tr
 
 if __name__ == '__main__':
     np.random.seed(2)
-    n_threads = cpu_count()//2-4  # To account for virtual cores
-    N_rep = n_threads*400  # Number of repeat simulations over parallel workers for reducing variance
+    n_threads = cpu_count()//2  # To account for virtual cores
+    N_rep = n_threads*4  # Number of repeat simulations over parallel workers for reducing variance
     n_sim = 5  # Number of in-thread simulations
     N_data_points = 50  # Number of steps to go
 
     n_c_points = 5
     c_range = 10**(np.linspace(-3, 1, n_c_points))
+    agent_opt2 = [2, True, "no_context", 1]
+    agent_opt3 = [2, "PUCB", 1]
+    agent_opt4 = [2, "alphaZero", 1]
+    agent_opt5 = [2, "MuZero", 1]
+    agent_opt6 = [2, True, "muzero_context", 1]
+    agent_opt7 = [2, True, "PUCT_context", 1]
 
-    agent_opt1 = [np.linspace(0, 1, 4000)]
-    agent_opt2 = [True, 2]
-    agent_opt3 = []
-
-    option_list = [agent_opt1, agent_opt2, agent_opt3]
-    labels = ["Bayes Vector", "Gauss_init", "UCB1"]
-    agents = [Bays_agent_vector_UCT2, Bays_agent_Gauss_beta, UCB1_agent]
+    option_list = [agent_opt2, agent_opt3, agent_opt4, agent_opt5, agent_opt6, agent_opt7]
+    labels = ["Bayes UCB", "PUCB", "AlphaZero", "MuZero", "MuZero context", "PUCT_context"]
+    agents = [Bays_agent_Gauss_beta, UCB1_agent, UCB1_agent, UCB1_agent, Bays_agent_Gauss_beta, Bays_agent_Gauss_beta]
 
     n_agents = len(option_list)
     c_optimal_actions = np.zeros((n_c_points, N_rep, N_data_points, n_agents))
@@ -37,7 +39,9 @@ if __name__ == '__main__':
         p = Pool(n_threads)
         c_option_list = []
         for option in option_list:
-            c_option_list.append([c_range[i]] + option)
+            c_option = option.copy()
+            c_option.insert(4, c_range[i])
+            c_option_list.append(c_option)
         test = explore_tree(N_data_points, agents, c_option_list)
         results = p.starmap(explore_tree, iterable=[(N_data_points, agents, c_option_list)] * N_rep)
         p.close()

@@ -9,19 +9,21 @@ from simulations import run_simulation, run_simulation_beta, tree_simulation, tr
 if __name__ == '__main__':
     np.random.seed(2)
     n_threads = 4
-    N_rep = n_threads*500  # Number of repeat simulations over parallel workers for reducing variance
+    N_rep = n_threads*40  # Number of repeat simulations over parallel workers for reducing variance
     n_sim = 5  # Number of in-thread simulations
-    N_data_points = 100  # Number of steps to go
-    agent_opt1 = [2, "PUCB", 2, 0]
-    agent_opt2 = [2, "PUCB", 2, 0.3]
-    agent_opt3 = [2, "PUCB", 2, 0.3]
-    agent_opt4 = [2, "PUCB", 2, 0.5]
-    agent_opt5 = [2, "MuZero", 2, 0.5]
-    agent_opt6 = [2, "UCB1", 2, 0.5]
+    N_data_points = 300  # Number of steps to go
+    noise = 0.2
+    agent_opt1 = [2, "PUCB", 1, noise]
+    agent_opt2 = [2, "alphaZero", 1, noise]
+    agent_opt3 = [2, "MuZero", 1, noise]
+    agent_opt4 = [2, True, "muzero_context", 1, noise]
+    agent_opt5 = [2, True, "PUCT_context", 1, noise]
+    agent_opt6 = [2, False, "PUCT_context", 1, noise]
+    #agent_opt6 = [2, True, "alphaGo", 1, noise]
 
-    option_list = [agent_opt3, agent_opt4, agent_opt5, agent_opt6]
-    labels = ["PUCB, Noise 0.1: Temp: 2", "PUCB Noise 0.5: Temp: 2", "MuZero Noise 0.5: Temp: 2", "UCB1"]
-    agents = [UCB1_agent, UCB1_agent, UCB1_agent, UCB1_agent]
+    option_list = [agent_opt1, agent_opt2, agent_opt3, agent_opt4, agent_opt5, agent_opt6]
+    labels = ["PUCB", "alphaZero", "MuZero", "Bayes MuZero", "Bayes PUCT True", "Bayes PUCT False"]
+    agents = [UCB1_agent, UCB1_agent, UCB1_agent, Bays_agent_Gauss_beta, Bays_agent_Gauss_beta, Bays_agent_Gauss_beta]
 
     t = time()
 
@@ -84,7 +86,7 @@ if __name__ == '__main__':
     ax2.plot(np.mean(regrets, axis=0), label=labels)
     ax2.legend()
     ax2.set_title("Cumulative regret")
-    #plt.xscale("log")
+    ax2.set_yscale("log")
     #plt.savefig("Cum_regret.png")
     #plt.show()
 
@@ -107,5 +109,5 @@ if __name__ == '__main__':
 
     # plt.xscale("log")
     #plt.savefig("Greedy_rew.png")
-    plt.savefig("results.png")
+    plt.savefig("results.pdf")
     plt.show()

@@ -81,6 +81,37 @@ class dummy_networkH(nn.Module):
         S = torch.reshape(S, (-1,) + self.output1_shape)
         return S
 
+class ram_networkH(nn.Module):
+    def __init__(self, input_shape, output1_shape, hidden_size):
+        super().__init__()
+        self.input_shape = input_shape
+        self.output1_shape = output1_shape
+        self.hidden_size = hidden_size
+        self.train_count = 0
+        self.layer1_1 = nn.Linear(np.prod(input_shape), self.hidden_size)
+        self.activation1_1 = nn.ReLU()
+        self.batchnorm1 = nn.BatchNorm1d(self.hidden_size)
+        self.layer1_2 = nn.Linear(self.hidden_size, self.hidden_size//2)
+        self.activation1_2 = nn.ReLU()
+        self.batchnorm2 = nn.BatchNorm1d(self.hidden_size//2)
+        self.layer1_3 = nn.Linear(self.hidden_size//2, self.hidden_size//4)
+        self.activation1_3 = nn.ReLU()
+        self.batchnorm3 = nn.BatchNorm1d(self.hidden_size//4)
+        self.layer1_4 = nn.Linear(self.hidden_size//4, self.hidden_size//8)
+        self.activation1_4 = nn.ReLU()
+        self.batchnorm4 = nn.BatchNorm1d(self.hidden_size//8)
+        self.layer1_5 = nn.Linear(self.hidden_size//8, np.prod(output1_shape))
+        self.activation1_5 = nn.ReLU()
+
+    def forward(self, x):
+        x_flat = x.view((-1, ) + (np.prod(self.input_shape),))  # Flatten
+        S = self.batchnorm1(self.activation1_1(self.layer1_1(x_flat)))
+        S = self.batchnorm2(self.activation1_2(self.layer1_2(S)))
+        S = self.batchnorm3(self.activation1_3(self.layer1_3(S)))
+        S = self.batchnorm4(self.activation1_4(self.layer1_4(S)))
+        S = self.activation1_5(self.layer1_5(S))
+        S = torch.reshape(S, (-1,) + self.output1_shape)
+        return S
 
 class dummy_networkF(nn.Module):
     def __init__(self, input_shape, output1_shape, hidden_size, support, transform=True):

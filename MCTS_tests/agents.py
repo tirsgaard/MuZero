@@ -59,14 +59,14 @@ class UCB1_agent_tree:
 
 class UCB1_agent:
     def __init__(self, N_bandits, c=2, criteria="UCB", temp=1, sd_noise=0.0, n_sim=1, min_node=False):
-        self.Q = np.zeros((N_bandits, n_sim)) + np.float("inf")
+        self.Q = np.zeros((N_bandits, n_sim)) #+ np.float("inf")
         self.V = np.zeros((N_bandits, n_sim))
         self.n_obs = np.zeros((N_bandits, n_sim), dtype="uint16")
         self.context = criteria
         self.min_node = min_node
         self.c = c
         self.temp = temp
-        self.noise = sd_noise # Should be added outside agent, but this is easier
+        self.noise = sd_noise  # Should be added outside agent, but this is easier
         self.i = 0
         self.c2 = 3
         self.n_sim = n_sim
@@ -76,6 +76,8 @@ class UCB1_agent:
             self.criterion = self.PUCT
         elif self.context == "MuZero":
             self.criterion = self.muZero
+        elif self.context == "alphaZero":
+            self.criterion = self.alphaZero
         else:
             raise("Criterion not found")
 
@@ -87,6 +89,12 @@ class UCB1_agent:
         a = np.argmax(self.Q + self.P * temp * (c_1 + m), axis=0)
         return a
 
+    def alphaZero(self):
+        c = 1.25
+        m = np.sqrt(self.i)/(1+self.n_obs)
+        a = np.argmax(self.Q + c * self.P * m, axis=0)
+        return a
+
     def PUCT(self):
         t = self.i + 1  # This is 1 indexed
         log_t = np.log(t)
@@ -94,7 +102,7 @@ class UCB1_agent:
         c[self.n_obs == 0] = 0
         m = (self.c / self.P) * np.sqrt(log_t / t) if t > 1 else self.c / self.P
         Q = self.Q.copy()
-        # Q[self.n_obs == 0] = 1
+        Q[self.n_obs == 0] = np.float("inf")
         if self.min_node:
             a = np.argmin(Q - c + m, axis=0)
         else:
@@ -125,6 +133,9 @@ class UCB1_agent:
             m = np.log((self.i + c_2 + 1) / c_2)
             temp = np.sqrt(self.i) / (1 + self.i/self.n_obs.shape[0])
             a = np.argmax(self.Q + self.P * temp * (c_1 + m))
+
+        elif self.context == "alphaZero":
+            a = self.alphaZero()
         else:
             a = np.argmax(self.Q)
         return a
@@ -371,8 +382,11 @@ class Bays_agent_Gauss_UCT2:
 
 
 class Bays_agent_Gauss_beta:
-    def __init__(self, N_bandits, c=2, initialize=True, n_sim=1, min_node=False):
+    def __init__(self, N_bandits, c=2, initialize=True, criteria="no_context", temp=1, sd_noise=0.0, n_sim=1, min_node=False):
         self.V = np.zeros((N_bandits, n_sim))  # Initialize with prior
+        self.context = criteria
+        self.temp = temp
+        self.noise = sd_noise  # Should be added outside agent, but this is easier
         self.alpha = 2
         self.beta = 5
         self.Q = np.zeros((N_bandits, n_sim)) + self.get_mean(self.alpha, self.beta)
@@ -382,8 +396,21 @@ class Bays_agent_Gauss_beta:
         self.min_node = min_node
         self.initialize = initialize
         self.c = c
+        self.c2 = 3  # For context
         self.i = 0
         self.n_sim = n_sim
+        if self.context == "no_context":
+            self.criterion = self.no_context
+        elif self.context == "context":
+            self.criterion = self.with_context
+        elif self.context == "PUCT_context":
+            self.criterion = self.PUCT
+        elif self.context == "muzero_context":
+            self.criterion = self.muZero
+        elif self.context == "alphaGo":
+            self.criterion = self.alphaGo
+        else:
+            raise("Criterion not found")
 
     def get_mean(self, alpha, beta):
         return alpha / (alpha + beta)
@@ -433,11 +460,77 @@ class Bays_agent_Gauss_beta:
             mu, sigma = self.min_dist(mu, self.Q[i][0], sigma, self.Sigmas[i][0])
         return mu, sigma
 
-    def act(self):
+    def set_context(self, P):
+        self.P = temperature_scale(P, self.temp, self.noise)
+
+    def no_context(self):
         if self.min_node:
             a = np.argmin(self.Q - np.sqrt(self.c * np.log(self.i) * self.Sigmas), axis=0)
         else:
             a = np.argmax(self.Q + np.sqrt(self.c * np.log(self.i) * self.Sigmas), axis=0)
+        return a
+
+    def with_context(self):
+        t = self.i + 1  # This is 1 indexed
+        log_t = np.log(t)
+        c = np.sqrt((self.c2 / self.c) * log_t / self.n_obs)
+        c[self.n_obs == 0] = 0
+        m = (self.c / self.P) * np.sqrt(log_t / t) if t > 1 else self.c / self.P
+        # Q[self.n_obs == 0] = 1
+        if self.min_node:
+            a = np.argmin(self.Q - c + m, axis=0)
+        else:
+            a = np.argmax(self.Q + c - m, axis=0)
+        return a
+
+    def PUCT(self):
+        t = self.i + 1  # This is 1 indexed
+        log_t = np.log(t)
+        c = np.sqrt((self.c2 / self.c) * log_t /self.n_obs)
+        c[self.n_obs == 0] = 0
+        m = (self.c / self.P) * np.sqrt(log_t / t) if t > 1 else self.c / self.P
+        Q = self.Q.copy()
+        Q[self.n_obs == 0] = np.float("inf")
+        if self.min_node:
+            a = np.argmin(self.Q - c + m, axis=0)
+        else:
+            a = np.argmax(self.Q + c - m, axis=0)
+        return a
+
+    def alphaGo(self):
+        c = 1.25
+        m = np.sqrt(self.i) / (1 + self.n_obs)
+        a = np.argmax(self.Q + c * self.P * m, axis=0)
+        return a
+
+    def muZero(self):
+        c_1 = 1.25
+        c_2 = 19652
+        m = np.log((self.i+c_2+1)/c_2)
+        temp = np.sqrt(self.i) / (1 + self.n_obs)
+        Q = self.Q.copy()
+        Q[self.n_obs == 0] = np.float("inf")
+        a = np.argmax(Q + self.P * temp * (c_1 + m), axis=0)
+        return a
+
+    def act(self):
+        return self.criterion()
+
+    def get_greedy_action(self):
+        if (self.context == "no_context") or (self.context == "alphaGo"):
+            a = np.argmax(self.Q)
+        elif self.context == "context" or self.context == "PUCT_context":
+            t = self.i + 1  # This is 1 indexed
+            log_t = np.log(t)
+            m = (self.c / self.P) * np.sqrt(log_t / t) if t > 1 else self.c / self.P
+            a = np.argmax(self.Q - m)
+
+        elif self.context == "muzero_context":
+            c_1 = 1.25
+            c_2 = 19652
+            m = np.log((self.i + c_2 + 1) / c_2)
+            temp = np.sqrt(self.i) / (1 + self.i / self.n_obs.shape[0])
+            a = np.argmax(self.Q + self.P * temp * m)
         return a
 
     def get_dist(self):

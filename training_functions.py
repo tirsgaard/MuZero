@@ -188,9 +188,9 @@ class model_trainer:
             S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp = self.convert_torch([S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp])
             u_support_batch, u_scaled = calc_support_dist(u_batch, self.g_model.support, scale_value=self.scale_values)
             z_support_batch, z_scaled = calc_support_dist(z_batch, self.f_model.support, scale_value=self.scale_values)
-            assert(torch.all(pi_batch.sum(dim=2) == 1.))
-            assert(torch.all(u_support_batch.sum(dim=2) == 1.))
-            assert(torch.all(z_support_batch.sum(dim=2) == 1.))
+            assert(torch.all(torch.isclose(pi_batch.sum(dim=2), torch.tensor(1.))))
+            assert(torch.all(torch.isclose(u_support_batch.sum(dim=2), torch.tensor(1.))))
+            assert(torch.all(torch.isclose(z_support_batch.sum(dim=2), torch.tensor(1.))))
             assert(torch.all(torch.isclose((self.g_model.support[None]*u_support_batch.view(self.BS*self.K, -1)).sum(dim=1), u_scaled.view(-1), atol=1e-06)))
             assert(torch.all(torch.isclose((self.f_model.support[None]*z_support_batch.view(self.BS*self.K, -1)).sum(dim=1), z_scaled.view(-1), atol=1e-06)))
 
