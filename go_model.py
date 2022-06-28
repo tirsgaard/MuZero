@@ -222,7 +222,7 @@ class ConvResNet(nn.Module):
 class ResNet_f(nn.Module):
     def __init__(self, in_channels, filter_size, policy_output_shape, policy_intermediate, value_intermediate, support, *args, **kwargs):
         super().__init__()
-        self.support = support
+        self.register_buffer('support', support)  # Register as buffer to avoid optimisation of values
         self.encoder = ResNetEncoder(in_channels, blocks_sizes=[filter_size], *args, **kwargs)
         self.policyHead = policyHead(filter_size, policy_intermediate, policy_output_shape, *args, **kwargs)
         self.valueHead = valueHead(filter_size, value_intermediate, self.support.shape[0], *args, **kwargs)
@@ -288,7 +288,7 @@ class StateHead(nn.Module):
 class ResNet_g(nn.Module):
     def __init__(self, in_channels, filter_size, policy_output_shape, output_channel, output_shape, support, transform=True, *args, **kwargs):
         super().__init__()
-        self.support = support
+        self.register_buffer('support', support)  # Register as buffer to avoid optimisation of values
         self.transform = transform
         self.encoder = ResNetEncoder(in_channels, blocks_sizes=[filter_size], *args, **kwargs)
         self.StateHead = StateHead(filter_size, filter_size, policy_output_shape, output_channel, *args, **kwargs)

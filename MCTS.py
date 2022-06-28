@@ -4,6 +4,18 @@ from torch.multiprocessing import Process, Queue, Pipe, Value, Lock, Manager, Po
 import graphviz
 import torch.nn as nn
 from models import stack_a
+import math
+
+def Phi(x):
+    #'Cumulative distribution function for the standard normal distribution'
+    return (1.0 + math.erf(x / math.sqrt(2.0))) / 2.0
+
+
+def phi(x):
+    # Propability mass distribution of the standard normal distribution
+    return 0.3989422802*math.exp(-0.5*x*x)  # Number is 1/sqrt(2*pi)
+
+
 class state_node:
     def __init__(self, action_size, id):
         self.action_edges = {}  # dictionary containing reference to child notes
@@ -14,7 +26,11 @@ class state_node:
         self.N = np.zeros(action_size)  # Total times each child node visited during MCTS
         self.N_inv = np.ones(action_size)  # Store inverse N for faster calculations
         self.Q = np.zeros(action_size)  # Average return observed for state for all actions
-        self.W = np.zeros(action_size, dtype=np.float64)  # Used to stabilise update of average return Q
+        self.W = np.zeros(action_size, dtype=np.float64)  # Used to make update of average return Q
+        self.squard_return = np.zeros(action_size, dtype=np.float64)
+        self.mu = np.zeros(action_size, dtype=np.float64)
+        self.sigma_squared = np.zeros(action_size, dtype=np.float64)
+
         self.illegal_actions = np.zeros(action_size)  # If any actions are illegal, default is none
 
     def explore(self, S, P, r, v):
@@ -30,6 +46,85 @@ class state_node:
         # Input:
         #    illegal_actions: array of same size as action space, with illegal actions set to 1, else 0
         self.illegal_actions[illegal_actions.astype("bool")] = float("-inf")
+
+
+class bayes_state_node:
+    def __init__(self, action_size, id):
+        self.action_edges = {}  # dictionary containing reference to child notes
+        self.id = id  # Not needed for algorithm, but usefull for visualisation
+        self.N_total = 1  # Total times node visited during MCTS
+        self.game_over = False  # If game is over
+        self.explored = False
+        self.N = np.zeros(action_size)  # Total times each child node visited during MCTS
+        self.N_inv = np.ones(action_size)  # Store inverse N for faster calculations
+        self.Q = np.zeros(action_size)  # Average return observed for state for all actions
+        self.W = np.zeros(action_size, dtype=np.float64)  # Used to make update of average return Q
+        self.squard_return = np.zeros(action_size, dtype=np.float64)
+        self.mu = np.zeros(action_size, dtype=np.float64)
+        self.sigma_squared = np.zeros(action_size, dtype=np.float64)
+
+        self.illegal_actions = np.zeros(action_size)  # If any actions are illegal, default is none
+
+    def explore(self, S, Prior, r, v):
+        self.r = r  # Reward from travelling from parent to this node
+        self.S = S  # Dynamic state
+        self.U = Prior  # Exploration values
+        self.mu = Prior[:, 0]
+        self.sigma_squared = Prior[:, 1]
+        self.v = v  # Value of state. Needs to be stored for priority sampling in ER
+        self.explored = True
+
+    def set_illegal(self, illegal_actions):
+        # Function for inserting illegal actions.
+        # Input:
+        #    illegal_actions: array of same size as action space, with illegal actions set to 1, else 0
+        self.illegal_actions[illegal_actions.astype("bool")] = float("-inf")
+
+    def backup(self, action, reward, extra_info=None, n_vl=0):
+        self.N_total += -n_vl + 1
+        self.N[action] += -n_vl + 1
+        # Skip inverse since it will be updated later
+        self.N_inv[action] = 1 / self.node.N[action]
+        if extra_info is None:
+            self.W[action] += reward + n_vl
+            Q = self.W[action] / self.N[action]
+            S = self.sigma_squared[action]
+
+            # This update rule comes from setting sigma bar to sigma
+            self.Q[action] = Q
+            self.mu[action] = S/2*((Q+reward)/S)
+            self.sigma_squared[action] = S/2
+
+        else:
+            mu, sigma = extra_info
+            self.Q[action] = mu
+            self.sigma_squared[action] = sigma
+
+        # Calculate own bandit distribution
+        mu, sigma = self.calc_max_dist()
+        return mu, sigma
+
+    def calc_max_dist(self):
+        mu = self.Q[0]
+        sigma = self.sigma_squared[0]
+        for i in range(1, self.Q.shape[0]):
+            mu, sigma = self.max_dist(mu, self.Q[i], sigma, self.sigma_squared[i])
+        return mu, sigma
+
+    def max_dist(self, mu1, mu2, sigma1, sigma2):
+        # Note sigma needs to be squared
+        rho = 0
+        sigma_m = np.sqrt(sigma1+sigma2-2*rho*np.sqrt(sigma1*sigma2))
+        alpha = (mu1-mu2)/sigma_m
+
+        Phi_alpha = Phi(alpha)  # Store to avoid
+        phi_alpha = phi(alpha)
+        F1 = alpha*Phi_alpha + phi_alpha
+        F2 = alpha*alpha*Phi_alpha*(1-Phi_alpha) + (1-2*Phi_alpha)*alpha*phi_alpha - phi_alpha*phi_alpha
+        mu = mu2 + sigma_m*F1
+        sigma = sigma2 + (sigma1-sigma2)*Phi_alpha + sigma_m * sigma_m * F2
+        return mu, sigma
+
 
 class min_max_vals:
     def __init__(self, min_val=None, max_val=None):
@@ -54,36 +149,6 @@ def generate_root(S_obs, h_Q, f_g_Q, h_send, h_rec, f_g_send, f_g_rec, MCTS_sett
     S, P, v = h_rec.recv()
     root_node.explore(S[0], P[0], 0, v)
     return root_node
-
-
-def node_back_up(node_path, v, gamma, n_vl, normalizer):
-    # Function for backing up after a new node has been evaluated
-    l = len(node_path)  # Length of path
-    k = l
-    r = []  # List containing all rewards (r)
-    r_cum = 0
-    v_cum = v
-    for node, action in reversed(node_path):
-        # Loop over path in reverse order for easier update of r
-        node.N_total += -n_vl + 1
-        node.N[action] += -n_vl + 1
-        # Skip inverse since it will be updated later
-        node.N_inv[action] = 1 / node.N[action]
-
-        """
-        taus = l-k-1 - np.arange(0, l-k)  # Reverse list of tau
-        gammas = gamma**taus
-        G = sum(gammas*r) + gamma**(l-k)*v
-        node.W[action] += G + n_vl
-        """
-        r_cum = gamma*r_cum + node.action_edges[action].r
-        v_cum = gamma*v_cum
-        node.W[action] += r_cum + v_cum + n_vl
-        node.Q[action] = node.W[action] / node.N[action]
-        normalizer.update(node.Q[action])  # Update lowest and highest Q-values observed in tree
-        r.append(node.r)
-        k -= 1
-    return
 
 
 def MCTS(root_node, f_g_Q, MCTS_settings):
@@ -114,7 +179,6 @@ def MCTS(root_node, f_g_Q, MCTS_settings):
         i += len(stored_jobs)
 
     return root_node, normalizer
-
 
 def select_node(root_node, normalizer, leaf_number, MCTS_settings):
     n_vl = MCTS_settings["virtual_loss"]
@@ -209,6 +273,40 @@ def backup_node(stored_jobs, S_array, r_array, P_array, v_array, normalizer, MCT
         node_back_up(current_path, v, gamma, n_vl, normalizer)
         k += 1  # Update k for each simulation
 
+
+def node_back_up(node_path, v, gamma, n_vl, normalizer):
+    # Function for backing up after a new node has been evaluated
+    l = len(node_path)  # Length of path
+    k = l
+    r = []  # List containing all rewards (r)
+    r_cum = 0
+    v_cum = v
+    for node, action in reversed(node_path):
+        # Loop over path in reverse order for easier update of r
+        node.N_total += -n_vl + 1
+        node.N[action] += -n_vl + 1
+        # Skip inverse since it will be updated later
+        node.N_inv[action] = 1 / node.N[action]
+        r_cum = gamma*r_cum + node.action_edges[action].r
+        v_cum = gamma*v_cum
+        node.W[action] += r_cum + v_cum + n_vl
+        node.Q[action] = node.W[action] / node.N[action]
+        normalizer.update(node.Q[action])  # Update lowest and highest Q-values observed in tree
+        r.append(node.r)
+        k -= 1
+    return
+
+
+def bayes_back_up(node_path, v, gamma, n_vl, normalizer):
+    # Function for backing up after a new node has been evaluated
+    extra_info = None
+    for node, action in reversed(node_path):
+        # Loop over path in reverse order for easier update of r
+        # Skip inverse since it will be updated later
+        reward = gamma*node.action_edges[action].r + gamma*gamma*v + n_vl
+        extra_info = node.backup(action, reward, extra_info)
+        v = extra_info[0]
+        normalizer.update(reward)  # Update lowest and highest Q-values observed in tree
     return
 
 

@@ -77,24 +77,37 @@ class MaxAndSkipEnv(gym.Wrapper):
 
 
 class RAMAndSkipEnv(gym.Wrapper):
-    def __init__(self, env, skip=4):
+    def __init__(self, env, skip=4, bits=True):
         super(RAMAndSkipEnv, self).__init__(env)
         # Initialise a double ended queue that can store a maximum of two states
         self.skip = skip
-        self.obs_array = np.empty((self.skip, 32, 32), dtype=np.float32)  # 128 bytes -> 1024 bits -> 32*32 values
+        self.bits = bits
+        if bits:
+            self.obs_array = np.empty((self.skip, 32, 32), dtype=np.float32)  # 128 bytes -> 1024 bits -> 32*32 values
+        else:
+            self.obs_array = np.empty((self.skip, 128), dtype=np.float32)  # 128 bytes
+        # Check for no-ops in the beginning
+        self.no_ops = 0
+        self.other_ops = False
 
     def step(self, action):
+        # Check for no ops
+        self.other_ops = self.other_ops or (action == 1)  # Store if other action have been performed
+        self.no_ops += (action != 1)*(not self.other_ops)  # Store number of other ops
         total_reward = 0.0
         for i in range(self.skip):
             # Take a step
             obs, reward, done, info = self.env.step(action)
             # Append the new state to the double ended queue buffer
-            self.obs_array[i] = np.unpackbits(obs).reshape(32, 32)
+            if self.bits:
+                obs = np.unpackbits(obs).reshape(32, 32)
+            self.obs_array[i] = obs
             # Update the total reward by summing the (reward obtained from the step taken) + (the current
             # total reward)
             total_reward += reward
             # If the game ends, break the for loop
-            if done:
+            if done or (self.no_ops>=30):
+                done = True  # Case where ops > 30
                 # Fill remaining images with newest observation
                 for j in range(i+1, self.skip):
                     self.obs_array[j] = self.obs_array[j - 1]
@@ -103,9 +116,12 @@ class RAMAndSkipEnv(gym.Wrapper):
         return frames, total_reward, done, info
 
     def reset(self):
-        obs = np.unpackbits(self.env.reset()).reshape(32, 32).astype(np.float32)
-        obs_array = np.repeat(obs[None], self.skip, axis=0)
+        obs = self.env.reset()
+        if self.bits:
+            obs = np.unpackbits(obs).reshape(32, 32).astype(np.float32)
+        obs_array = np.repeat(obs.astype(np.float32)[None], self.skip, axis=0)
         return obs_array
 
 
-
+def RAM_Breakout(render):
+    return RAMAndSkipEnv(gym.make("ALE/Breakout-v5", full_action_space=False, obs_type="ram", render_mode=render), skip=4)

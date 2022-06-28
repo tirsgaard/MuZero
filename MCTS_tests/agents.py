@@ -10,12 +10,29 @@ def phi(x):
     # Propability mass distribution of the standard normal distribution
     return 0.3989422802*math.exp(-0.5*x*x)  # Number is 1/sqrt(2*pi)
 
-def temperature_scale(P, temp, sd_noise):
+def temperature_scale(P, temp, sd_noise, epsilon=10**-4):
     P = np.abs(np.random.normal(P, P * 0 + sd_noise))
+    P = np.clip(P, epsilon, 1-epsilon)
     expon = 1/temp
     P_temp = P**expon
     P_temp = P_temp / P_temp.sum()
     return P_temp
+
+def max_dist(mu1, mu2, sigma1, sigma2):
+    # Normal approximation of max operation between two distributions
+    # Note sigma needs to be squared
+    rho = 0
+    sigma_m = np.sqrt(sigma1+sigma2-2*rho*np.sqrt(sigma1*sigma2))
+    alpha = (mu1-mu2)/sigma_m
+
+    Phi_alpha = Phi(alpha)  # Store to avoid
+    phi_alpha = phi(alpha)
+    F1 = alpha*Phi_alpha + phi_alpha
+    F2 = alpha*alpha*Phi_alpha*(1-Phi_alpha) + (1-2*Phi_alpha)*alpha*phi_alpha - phi_alpha*phi_alpha
+    mu = mu2 + sigma_m*F1
+    sigma = sigma2 + (sigma1-sigma2)*Phi_alpha + sigma_m * sigma_m * F2
+    return mu, sigma
+
 
 class UCB1_agent_tree:
     def __init__(self, bandit_shape, n_sim=1):
@@ -58,18 +75,22 @@ class UCB1_agent_tree:
 
 
 class UCB1_agent:
-    def __init__(self, N_bandits, c=2, criteria="UCB", temp=1, sd_noise=0.0, n_sim=1, min_node=False):
+    def __init__(self, N_bandits, c=2, criteria="UCB1", temp=1, var_noise=0.0, n_sim=1, min_node=False):
         self.Q = np.zeros((N_bandits, n_sim)) #+ np.float("inf")
         self.V = np.zeros((N_bandits, n_sim))
-        self.n_obs = np.zeros((N_bandits, n_sim), dtype="uint16")
+        self.n_obs = np.zeros((N_bandits, n_sim), dtype="int16")
         self.context = criteria
         self.min_node = min_node
         self.c = c
         self.temp = temp
-        self.noise = sd_noise  # Should be added outside agent, but this is easier
+        self.noise = var_noise  # Should be added outside agent, but this is easier
         self.i = 0
         self.c2 = 3
         self.n_sim = n_sim
+        self.vl = 3
+        s = temp
+        self.epsilon = lambda x: 1/(x**s)
+        self.explored = False
         if self.context == "UCB1":
             self.criterion = self.UCB1
         elif self.context == "PUCB":
@@ -78,6 +99,8 @@ class UCB1_agent:
             self.criterion = self.muZero
         elif self.context == "alphaZero":
             self.criterion = self.alphaZero
+        elif self.context == 'epsilon':
+            self.criterion = self.epsilon_greedy
         else:
             raise("Criterion not found")
 
@@ -88,6 +111,13 @@ class UCB1_agent:
         temp = np.sqrt(self.i) / (1 + self.n_obs)
         a = np.argmax(self.Q + self.P * temp * (c_1 + m), axis=0)
         return a
+
+    def epsilon_greedy(self):
+        p = np.random.rand()
+        if p<=self.epsilon(self.i+1):
+            return np.array([np.random.choice(self.Q.shape[0])])
+        else:
+            return np.argmax(self.Q, axis=0)
 
     def alphaZero(self):
         c = 1.25
@@ -140,255 +170,54 @@ class UCB1_agent:
             a = np.argmax(self.Q)
         return a
 
+    def set_context(self, alphas, betas, is_leaf=False):
+        if (self.context == "PUCB") or (self.context == "MuZero") or (self.context == "alphaZero"):
+            # Compute chance of each child being the max
+            x_range = np.linspace(0.00001, 0.99999, 10**4)  # Resolution of interation
+            n_child = alphas.shape[0]
+            pdfs = np.stack([beta.pdf(x_range, alphas[i], betas[i]) for i in range(n_child)])
+            cdfs = np.stack([beta.cdf(x_range, alphas[i], betas[i]) for i in range(n_child)])
+
+            self.P = np.empty((n_child, 1))
+            for i in range(alphas.shape[0]):
+                self.P[i] = np.mean(pdfs[i]*np.prod(cdfs[np.arange(n_child) != i], axis=0))  # Mean to reduce overflow
+            self.P = self.P / self.P.sum()
+            # Scale P with sqrt as it should yield the best asymtotic bound
+            self.P = np.sqrt(self.P)
+            self.P = self.P / self.P.sum()
+
     def get_dist(self):
         return None
 
     def initialize_dist(self, a, extra_info):
         return None
 
-    def set_context(self, P):
-        self.P = temperature_scale(P, self.temp, self.noise)
+    def backup(self, a, r, extra_info=None, vl=False):
+        self.explored = (not vl) or self.explored  # don't explore if virtual
+        n_visit = self.vl if vl else 1
 
-    def backup(self, a, r, extra_info=None):
-        self.V[a, range(self.n_sim)] += r
-        self.n_obs[a, range(self.n_sim)] += 1
+        self.V[a, range(self.n_sim)] += r*n_visit
+        self.n_obs[a, range(self.n_sim)] += n_visit
         self.Q[a, range(self.n_sim)] = self.V[a, range(self.n_sim)] / self.n_obs[a, range(self.n_sim)]
-        self.i += 1
+        self.i += n_visit
+        return extra_info
+
+    def undo_vl(self, a, r, extra_info=None):
+        self.V[a, range(self.n_sim)] -= r*self.vl
+        self.n_obs[a, range(self.n_sim)] -= self.vl
+        self.Q[a, range(self.n_sim)] = self.V[a, range(self.n_sim)] / self.n_obs[a, range(self.n_sim)]
+        self.i -= self.vl
         return extra_info
 
 
-class UCB1_tuned_agent:
-    def __init__(self, N_bandits, n_sim = 1, upper_variance = 2, known_variance = True):
-        self.Q = np.zeros((N_bandits, n_sim)) + np.float("inf")
-        self.V = np.zeros((N_bandits, n_sim))
-        self.V2 = np.zeros((N_bandits, n_sim)) # This is sum of squared reward
-        self.UV = np.zeros((N_bandits, n_sim))
-        self.n_obs = np.zeros((N_bandits, n_sim), dtype="uint16")
-        self.upper_variance = np.zeros((N_bandits, n_sim)) + upper_variance
-        self.known_variance = known_variance
-        self.n_sim = n_sim
-        self.c = 2
-        self.i = 1
-
-    def act(self):
-        if self.known_variance:
-            U_var = self.upper_variance
-        else:
-            U_var = np.minimum(self.upper_variance, self.UV+np.sqrt(2*np.log(self.i)/self.n_obs))
-        a = np.argmax(self.Q + self.c*np.sqrt( np.log(self.i)/self.n_obs * U_var), axis=0)
-        return a
-
-    def backup(self, a, r):
-        self.V[a, range(self.n_sim)] += r
-        self.V2[a, range(self.n_sim)] += r*r
-        self.n_obs[a, range(self.n_sim)] += 1
-        self.Q[a, range(self.n_sim)] = self.V[a, range(self.n_sim)] / self.n_obs[a, range(self.n_sim)]
-        self.UV[a, range(self.n_sim)] = (1/self.n_obs[a, range(self.n_sim)])*self.V2[a, range(self.n_sim)] - self.Q[a, range(self.n_sim)]*self.Q[a, range(self.n_sim)]
-        self.i += 1
-
-
-class UCB1_normal_agent:
-    def __init__(self, N_bandits, n_sim = 1):
-        self.Q = np.zeros((N_bandits, n_sim)) + np.float("inf")
-        self.V = np.zeros((N_bandits, n_sim))
-        self.q = np.zeros((N_bandits, n_sim))
-        self.n_obs = np.zeros((N_bandits,  n_sim), dtype="uint16")
-        self.i = 1
-        self.n_sim = n_sim
-
-    def act(self):
-        min_play = np.min(self.n_obs, axis=0)
-
-        temp = (self.q - self.n_obs * (self.Q ** 2)) * np.log(self.i - 1) / ((self.n_obs - 1) * self.n_obs)
-        temp1 = np.argmax(self.Q + (16 * temp) ** 0.5, axis=0)
-        temp2 = np.argmin(self.n_obs, axis=0)
-        cond = min_play<np.ceil(8*np.log(self.i))
-        a = np.where(cond, temp2, temp1)
-        return a
-
-    def backup(self, a, r):
-        self.q[a, range(self.n_sim)] += r * r
-        self.V[a, range(self.n_sim)] += r
-        self.n_obs[a, range(self.n_sim)] += 1
-        self.Q[a, range(self.n_sim)] = self.V[a, range(self.n_sim)] / self.n_obs[a, range(self.n_sim)]
-        self.i += 1
-
-
-class UCB2_agent:
-    def __init__(self, N_bandits, c=2, n_sim = 1):
-        self.Q = np.zeros((N_bandits, n_sim)) + np.float("inf")
-        self.V = np.zeros((N_bandits, n_sim))
-        self.r = np.zeros((N_bandits, n_sim))
-        self.n_obs = np.zeros((N_bandits, n_sim), dtype="uint16")
-        self.alpha = 0.1
-        self.i = 1
-        self.remaining_play = np.zeros((n_sim,), dtype="int16")
-        self.to_play        = np.zeros((n_sim,), dtype="int16")
-        self.n_sim = n_sim
-        self.indexer = range(self.n_sim) # This is just for sanity
-
-    def tau(self, r):
-        return np.ceil((1+self.alpha)**r)
-
-    def act(self):
-
-        self.remaining_play -= 1
-
-        not_reset = self.remaining_play>0
-        reset = np.logical_not(not_reset)
-
-        # Update a values after epoch for the last chosen action
-        self.r[self.to_play, self.indexer] += reset
-        tau_cur = self.tau(self.r)
-        self.a = np.sqrt((1 + self.alpha) * np.log(np.exp(1) * self.i / tau_cur) / (2 * tau_cur))
-        a = np.argmax(self.Q + self.a, axis = 0)
-        self.to_play[reset] = a[reset]
-        self.remaining_play[reset] = (self.tau(self.r[a, self.indexer]+1) - self.tau(self.r[a, self.indexer]))[reset]
-
-        return self.to_play
-
-    def backup(self, a, r):
-        self.V[a, self.indexer] += r
-        self.n_obs[a, self.indexer] += 1
-        self.Q[a, self.indexer] = self.V[a, self.indexer] / self.n_obs[a, self.indexer]
-        self.i += 1
-
-
-class Bays2_agent:
-    def __init__(self, N_bandits, prior_mean, prior_var, n_sim = 1):
-        self.Q = np.zeros((N_bandits, n_sim)) + np.float("inf")
-        self.V = np.zeros((N_bandits, n_sim))
-        self.sigma1 = np.zeros((N_bandits, n_sim))
-        self.sigma2 = np.zeros((N_bandits, n_sim))
-        self.n_obs = np.zeros((N_bandits, n_sim), dtype="uint16")
-        self.i = 1
-        self.n_sim = n_sim
-        self.indexer = range(self.n_sim) # This is just for sanity
-
-    def act(self):
-        a = np.argmax(self.mu + np.sqrt(2*np.log(self.i)*self.sigma), axis = 0)
-        return a
-
-    def backup(self, a, r):
-        self.V[a, self.indexer] += r
-        self.n_obs[a, self.indexer] += 1
-        self.Q[a, self.indexer] = self.V[a, self.indexer] / self.n_obs[a, self.indexer]
-        sigmam = self.sigma1*self.sigma1 + self.sigma2*self.sigma2# No correlation term included
-        alpha = (self.mu1-self.mu2)/sigmam
-        Phi_alpha = norm.cdf(alpha)
-        phi_alpha = norm.pdf(alpha)
-        F1 = alpha*Phi_alpha+phi_alpha
-        F2 = alpha*alpha*Phi_alpha*(1-Phi_alpha)+(1-2*Phi_alpha)*alpha*phi_alpha-phi_alpha*phi_alpha
-
-        self.mu = self.mu2+sigmam*F1
-        self.sigma = self.sigma2+(self.sigma1-self.sigma2)*Phi_alpha+sigmam*F2
-
-        self.i += 1
-
-
-class Bayes_agent:
-    def __init__(self, N_bandits, mu_prior, sigma_prior, N_data_points):
-        ## Reset statistics
-        self.mu_hat = np.zeros(N_bandits)
-        self.n_obs = np.zeros(N_bandits, dtype="uint16")
-        self.sigma_obs = np.zeros(N_bandits) + float("inf")
-        self.mu_obs = np.zeros(N_bandits)
-        self.mu_prior = mu_prior
-        self.sigma_prior = sigma_prior
-        self.sigma_post = sigma_prior.copy()
-        self.mu_post = mu_prior.copy()
-        self.returns_cum = np.zeros(N_bandits)
-        self.obs = np.zeros((N_bandits, N_data_points))
-
-    def act(self):
-        mu_diff = self.mu_post[1] - self.mu_post[0]
-        prop_1 = Phi(mu_diff / np.sqrt(self.sigma_post[0] ** 2 + self.sigma_post[1] ** 2))  # Chance bandit 2 is best
-        prop_0 = 1 - prop_1  # Chance bandit 1 is best
-        a = np.random.choice(2, p=np.array([prop_0, prop_1]))
-        return a
-
-    def backup(self, a, r):
-        self.n_obs[a] += 1
-        self.obs[a, self.n_obs[a]] = r
-        self.returns_cum[a] += r
-
-        ### Update sample statistics
-        data = self.obs[a, 0:self.n_obs[a]]
-        self.sigma_obs[a] = np.var(data, ddof=1) ** 0.5
-        # Take care of first sampling
-        if self.n_obs[a] == 1:
-            self.sigma_obs[a] = float("inf")
-        self.mu_obs[a] = np.mean(data)
-
-        ### Update posterior (This would easier if done via precision instead of variance)
-        self.sigma_post[a] = 1 / (1 / (self.sigma_prior[a] ** 2) + self.n_obs[a] / (self.sigma_obs[a] ** 2))
-        self.mu_post[a] = self.sigma_post[a] * (self.mu_prior[a] / self.sigma_prior[a] ** 2 + self.returns_cum[a] / self.sigma_obs[a] ** 2)
-
-class Bays_agent_Gauss_UCT2:
-    def __init__(self, N_bandits, n_sim=1):
-        self.Q = np.zeros((N_bandits, n_sim)) + np.float("inf")
-        self.V = np.zeros((N_bandits, n_sim))  # Store sum of returns
-        self.W = np.ones((N_bandits, n_sim))  # Store sum of squared returns
-        self.Sigmas = np.ones((N_bandits, n_sim))  # These are sigma^2
-        self.n_obs = np.zeros((N_bandits, n_sim), dtype="uint16")
-        self.N_bandits = N_bandits
-        self.c = 2
-        self.i = 0
-        self.n_sim = n_sim
-
-    def combine(self, mu1, mu2, sigma1, sigma2):
-        # Note sigma needs to be squared
-        rho = 0
-        sigma_m = sigma1+sigma2-2*rho*sigma1*sigma2
-        alpha = (mu1-mu2)/sigma_m
-
-        Phi_alpha = Phi(alpha)  # Store to avoid
-        phi_alpha = phi(alpha)
-        F1 = alpha*Phi_alpha + phi_alpha
-        F2 = alpha*alpha*Phi_alpha*(1-Phi_alpha) + (1-2*Phi_alpha)*alpha*phi_alpha - phi_alpha*phi_alpha
-        mu = mu2 + sigma_m*F1
-        sigma = sigma2 + (sigma1-sigma2)*Phi_alpha + sigma_m * F2
-        return mu, sigma
-
-    def calc_max_dist(self):
-        mu = self.Q[0][0]
-        sigma = self.Sigmas[0][0]
-        for i in range(1, self.N_bandits):
-            mu, sigma = self.combine(mu, self.Q[i][0], sigma, self.Sigmas[i][0])
-        return mu, sigma
-
-    def act(self):
-        a = np.argmax(self.Q + np.sqrt(self.c*np.log(self.i))*self.Sigmas, axis=0)
-        return a
-
-    def backup(self, a, r, extra_info=None):
-        self.n_obs[a, range(self.n_sim)] += 1
-        self.i += 1
-        if extra_info is None:
-            # Case where bandit is at a leaf node
-            self.V[a, range(self.n_sim)] += r
-            self.W[a, range(self.n_sim)] += r*r
-            self.Q[a, range(self.n_sim)] = self.V[a, range(self.n_sim)] / self.n_obs[a, range(self.n_sim)]
-            Q_idx = self.Q[a, range(self.n_sim)]
-            self.Sigmas[a, range(self.n_sim)] = self.W[a, range(self.n_sim)]/self.n_obs[a, range(self.n_sim)] - Q_idx*Q_idx  # Variance
-        else:
-            mu, sigma = extra_info
-            assert(np.all(self.V == 0))
-            self.Q[a, range(self.n_sim)] = mu
-            self.Sigmas[a, range(self.n_sim)] = sigma
-        # Calculate own bandit distribution
-        mu, sigma = self.calc_max_dist()
-        return mu, sigma
-
-
 class Bays_agent_Gauss_beta:
-    def __init__(self, N_bandits, c=2, initialize=True, criteria="no_context", temp=1, sd_noise=0.0, n_sim=1, min_node=False):
+    def __init__(self, N_bandits, c=2, initialize=True, criteria="no_context", temp=1, var_noise=0.0, n_sim=1, min_node=False):
         self.V = np.zeros((N_bandits, n_sim))  # Initialize with prior
         self.context = criteria
         self.temp = temp
-        self.noise = sd_noise  # Should be added outside agent, but this is easier
-        self.alpha = 2
-        self.beta = 5
+        self.noise = var_noise  # Should be added outside agent, but this is easier
+        self.alpha = np.ones((N_bandits, n_sim))*2
+        self.beta = np.ones((N_bandits, n_sim))*5
         self.Q = np.zeros((N_bandits, n_sim)) + self.get_mean(self.alpha, self.beta)
         self.Sigmas = np.zeros((N_bandits, n_sim)) + self.get_var(self.alpha, self.beta)  # These are sigma^2
         self.n_obs = np.zeros((N_bandits, n_sim), dtype="uint16")
@@ -398,8 +227,10 @@ class Bays_agent_Gauss_beta:
         self.c = c
         self.c2 = 3  # For context
         self.i = 0
+        self.vl = 3
+        self.explored = False
         self.n_sim = n_sim
-        if self.context == "no_context":
+        if (self.context == "no_context") or (self.context == "UCT1_context") or (self.context == "UCT1_extracontext"):
             self.criterion = self.no_context
         elif self.context == "context":
             self.criterion = self.with_context
@@ -462,14 +293,40 @@ class Bays_agent_Gauss_beta:
             mu, sigma = self.min_dist(mu, self.Q[i][0], sigma, self.Sigmas[i][0])
         return mu, sigma
 
-    def set_context(self, P):
-        self.P = temperature_scale(P, self.temp, self.noise)
+    def set_context(self, alphas, betas, is_leaf=False):
+        if (self.context == "UCT1_context") or (self.context == "thompson") or (self.context == "UCT1_extracontext"):
+            alphabeta = alphas+betas
+            self.Q[:, 0] = alphas/alphabeta
+            self.Sigmas[:, 0] = alphas*betas/((alphabeta+1)*alphabeta*alphabeta)
+            if is_leaf:
+                self.alpha[:, 0] = alphas
+                self.beta[:, 0] = betas
+                #if self.context == "UCT1_extracontext":
+                #    self.i += np.sum(self.alpha + self.beta)
+                return
+        if (self.context == "PUCT_context") or (self.context == "muzero_context"):
+            # Compute chance of each child being the max
+            x_range = np.linspace(0.00001, 0.99999, 10**4)  # Resolution of interation
+            n_child = alphas.shape[0]
+            pdfs = np.stack([beta.pdf(x_range, alphas[i], betas[i]) for i in range(n_child)])
+            cdfs = np.stack([beta.cdf(x_range, alphas[i], betas[i]) for i in range(n_child)])
+
+            self.P = np.empty((n_child, 1))
+            for i in range(alphas.shape[0]):
+                self.P[i] = np.mean(pdfs[i]*np.prod(cdfs[np.arange(n_child) != i], axis=0))  # Mean to reduce overflow
+            self.P = self.P / self.P.sum()
+            # Scale P with sqrt as it should yield the best asymtotic bound
+            self.P = np.sqrt(self.P)
+            self.P = self.P / self.P.sum()
 
     def no_context(self):
         if self.min_node:
             a = np.argmin(self.Q - np.sqrt(self.c * np.log(self.i) * self.Sigmas), axis=0)
         else:
-            a = np.argmax(self.Q + np.sqrt(self.c * np.log(self.i) * self.Sigmas), axis=0)
+
+            disc = np.log(self.i) if self.i>0 else float("inf")
+            temp = self.Q + np.sqrt(self.c * disc * self.Sigmas)
+            a = np.argmax(temp, axis=0)
         return a
 
     def with_context(self):
@@ -523,7 +380,7 @@ class Bays_agent_Gauss_beta:
         return self.criterion()
 
     def get_greedy_action(self):
-        if (self.context == "no_context") or (self.context == "alphaGo") or (self.context == "thompson"):
+        if (self.context == "no_context") or (self.context == "alphaGo") or (self.context == "thompson") or (self.context == "UCT1_context") or (self.context == "UCT1_extracontext"):
             a = np.argmax(self.Q)
         elif self.context == "context" or self.context == "PUCT_context":
             t = self.i + 1  # This is 1 indexed
@@ -547,19 +404,39 @@ class Bays_agent_Gauss_beta:
         return mu, sigma
 
     def initialize_dist(self, a, extra_info):
-        if self.initialize:
+        if self.initialize and not self.context == "UCT1_context":
             mu, sigma = extra_info
             self.Q[a, range(self.n_sim)] = mu
             self.Sigmas[a, range(self.n_sim)] = sigma
 
-    def backup(self, a, r, extra_info=None):
-        self.n_obs[a, range(self.n_sim)] += 1
-        self.i += 1
+    def backup(self, a, r, extra_info=None, vl=False):
+        self.explored = (not vl) or self.explored  # don't explore if virtual
+        n_visits = self.vl if vl else 1
+        self.n_obs[a, range(self.n_sim)] += n_visits
+        self.i += n_visits
         if extra_info is None:
             # Case where bandit is at a leaf node
-            self.V[a, range(self.n_sim)] += r
-            alpha = self.alpha + self.V[a, range(self.n_sim)]
-            beta = self.beta + self.n_obs[a, range(self.n_sim)] - self.V[a, range(self.n_sim)]
+            self.V[a, range(self.n_sim)] += r*n_visits
+            alpha = self.alpha[a, range(self.n_sim)] + self.V[a, range(self.n_sim)]
+            beta = self.beta[a, range(self.n_sim)] + self.n_obs[a, range(self.n_sim)] - self.V[a, range(self.n_sim)]
+            self.Q[a, range(self.n_sim)] = self.get_mean(alpha, beta)
+            self.Sigmas[a, range(self.n_sim)] = self.get_var(alpha, beta)
+        else:
+            mu, sigma = extra_info
+            self.Q[a, range(self.n_sim)] = mu
+            self.Sigmas[a, range(self.n_sim)] = sigma
+        # Calculate own bandit distribution
+        mu, sigma = self.get_dist()
+        return mu, sigma
+
+    def undo_vl(self, a, r, extra_info=None):
+        self.n_obs[a, range(self.n_sim)] -= self.vl
+        self.i -= self.vl
+        if extra_info is None:
+            # Case where bandit is at a leaf node
+            self.V[a, range(self.n_sim)] -= self.vl*r
+            alpha = self.alpha[a, range(self.n_sim)] + self.V[a, range(self.n_sim)]
+            beta = self.beta[a, range(self.n_sim)] + self.n_obs[a, range(self.n_sim)] - self.V[a, range(self.n_sim)]
             self.Q[a, range(self.n_sim)] = self.get_mean(alpha, beta)
             self.Sigmas[a, range(self.n_sim)] = self.get_var(alpha, beta)
         else:
@@ -572,7 +449,7 @@ class Bays_agent_Gauss_beta:
 
 
 class Bays_agent_vector_UCT2:
-    def __init__(self, N_bandits, c=2, support=np.linspace(0, 1, 4000), n_sim=1, min_node=False):
+    def __init__(self, N_bandits, c=2, initialize=True, support=np.linspace(0, 1, 4000), criteria="max", n_sim=1, min_node=False):
         self.N_support = support.shape[0]
         self.theta = np.zeros((N_bandits, self.N_support))
         self.theta[:] = beta.pdf(support, 2, 5)[None]  #np.zeros((N_bandits, self.N_support)) + 1/self.N_support  # Initialize to uniform dist
@@ -580,18 +457,29 @@ class Bays_agent_vector_UCT2:
         self.theta_count = np.zeros((N_bandits, self.N_support))  # + 1/self.N_support  # To store each observation
         self.theta_count[:, 0] = 5  # Beta
         self.theta_count[:, -1] = 2  # Alpha
+        self.context = criteria
         self.support = support
         self.support_squared = support*support
         self.Q = np.zeros((N_bandits, n_sim)) + self.get_mean(2, 5)  # Average return for each child
         self.V = np.zeros((N_bandits, n_sim))  # Store sum of returns
         self.Sigmas = np.zeros((N_bandits, n_sim)) + self.get_var(2, 5)  # These are sigma^2 of the child returns
         self.n_obs = np.zeros((N_bandits, n_sim), dtype="uint16")
-        self.initialize = True
+        self.initialize = initialize
+        self.type = criteria
         self.min_node = min_node
         self.N_bandits = N_bandits
         self.c = c
+        self.temp = 1
+        self.noise = 0.002551020408
         self.i = 0
         self.n_sim = n_sim
+        if criteria == "UCT1":
+            self.criteria = self.UCT1
+        elif criteria == "thompson":
+            self.criteria = self.thompson
+        elif criteria == "thompson_bayes":
+            self.criteria = self.thompson
+
 
     def max_dist(self, mu1, mu2):
         # Use cumsum for O(N) scaling. Alternative is outer product
@@ -638,19 +526,62 @@ class Bays_agent_vector_UCT2:
             self.Q[a, range(self.n_sim)] = mu
             self.Sigmas[a, range(self.n_sim)] = sigma
 
+    def calc_thompson_dist(self):
+        cdfs = np.cumsum(self.theta, axis=1)
+        prod_cdfs = np.prod(cdfs, axis=0)
+        prod_cdfs = prod_cdfs[None]/cdfs
+        prod_cdfs[prod_cdfs!=prod_cdfs] = 0
+        mixing_p = (self.theta*prod_cdfs).sum(axis=1, keepdims=True)
+        mixing_p = mixing_p/mixing_p.sum()  # Should sum to one, but floating error
+        theta = (mixing_p*self.theta).sum(axis=0)
+        mean = (theta * self.support).sum()
+        sigma = (theta * self.support_squared).sum() - mean * mean
+        return mean, sigma, theta
+
+
     def get_dist(self):
-        if self.min_node:
-            mu, sigma, theta = self.calc_min_dist()
+        if self.type == "thompson_bayes":
+            mu, sigma, theta = self.calc_thompson_dist()
         else:
-            mu, sigma, theta = self.calc_max_dist()
+            if self.min_node:
+                mu, sigma, theta = self.calc_min_dist()
+            else:
+                mu, sigma, theta = self.calc_max_dist()
         return mu, sigma, theta
 
-    def act(self):
+    def UCT1(self):
+        disc = np.log(self.i) if self.i > 0 else 0
         if self.min_node:
-            a = np.argmin(self.Q - np.sqrt(self.c * np.log(self.i) * self.Sigmas), axis=0)
+            a = np.argmin(self.Q - np.sqrt(self.c * disc * self.Sigmas), axis=0)
         else:
-            a = np.argmax(self.Q + np.sqrt(self.c*np.log(self.i)*self.Sigmas), axis=0)
+            a = np.argmax(self.Q + np.sqrt(self.c * disc * self.Sigmas), axis=0)
         return a
+
+    def thompson(self):
+        # Sample from each distribution
+        returns = np.empty((self.N_bandits,))
+        for i in range(self.N_bandits):
+            returns[i] = self.support[np.random.choice(self.theta[i].shape[0], p=self.theta[i])]
+        a = np.argmax(returns, axis=0)[None]
+        return a
+
+    def act(self):
+        return self.criteria()
+
+    def set_context(self, P, is_leaf=False):
+        if self.context == "UCT1":
+            self.Q[:, 0] = P[:, 0]
+            self.Sigmas[:, 0] = self.noise
+            if is_leaf:
+                Q = P[:, 0]
+                S = self.noise
+                alpha = -Q * (Q * Q - Q + S) / S
+                self.theta_count[:, -1] = alpha
+                beta = (Q * Q - Q + S) * (Q - 1) / S
+                self.theta_count[:, 0] = beta
+                for a in range(alpha.shape[0]):
+                    self.theta[a] = beta_to_theta(alpha[a], beta[a], self.support)
+        self.P = temperature_scale(P, self.temp, np.sqrt(self.noise))
 
     def update_theta(self, a, r):
         lowest, highest = nearest_support(r, self.support)
@@ -660,6 +591,10 @@ class Bays_agent_vector_UCT2:
         # Spread reward observation over support
         self.theta_count[a, lowest] += lowest_p
         self.theta_count[a, highest] += 1 - lowest_p
+
+    def get_greedy_action(self):
+        a = np.argmax(self.Q)
+        return a
 
     def backup(self, a, r, extra=None):
         self.n_obs[a, range(self.n_sim)] += 1
@@ -682,10 +617,13 @@ class Bays_agent_vector_UCT2:
             self.Sigmas[a, range(self.n_sim)] = sigma
             self.theta[a] = theta
         # Calculate own bandit distribution
-        if self.min_node:
-            mu, sigma, theta = self.calc_min_dist()
+        if self.type == "thompson_bayes":
+            mu, sigma, theta = self.calc_thompson_dist()
         else:
-            mu, sigma, theta = self.calc_max_dist()
+            if self.min_node:
+                mu, sigma, theta = self.calc_min_dist()
+            else:
+                mu, sigma, theta = self.calc_max_dist()
         return mu, sigma, theta
 
 def nearest_support(input, support):

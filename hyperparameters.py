@@ -27,7 +27,7 @@ MCTS_settings = {"n_parallel_explorations": 1,  # Number of pseudo-parrallel run
                  "hidden_S_size": (4, 4),  # Size of the hidden state
                  "hidden_S_channel": 4,  # Size of the hidden state
                  "virtual_loss": 3,  # Magnitude of loss during parallel explorations
-                 "number_of_threads": 2,  # Number of games / threads to run on CPU
+                 "number_of_threads": 16,  # Number of games / threads to run on CPU
                  "N_MCTS_sim": 50,  # Number of MCTS simulations for each action
                  "c1": 1.25,  # parameter for pUCT selection
                  "c2": 19652,
@@ -46,5 +46,6 @@ training_settings = {"train_batch_size": 2,  # Batch size on GPU during training
                      "momentum": 0.9,  # Original was 0.9
                      "weight_decay": 1e-4,  # Original was 1-e4
                      "uniform_sampling": False,  # If prioritized sampling should be disabled, Original False
-                     "scale_values": True  # Scale values with transforms. Original True
+                     "scale_values": True,  # Scale values with transforms. Original True
+                     "use_different_gpu": True,  # Use different gpu's for training and self-play if possible
                      }

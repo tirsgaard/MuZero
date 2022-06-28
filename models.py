@@ -29,7 +29,7 @@ class dummy_networkG(nn.Module):
         self.input_shape = input_shape
         self.output1_shape = output1_shape
         self.hidden_size = hidden_size
-        self.support = support
+        self.register_buffer('support', support)  # Register as buffer to avoid optimisation of values
         self.train_count = 0
 
         # Hidden state head
@@ -113,13 +113,273 @@ class ram_networkH(nn.Module):
         S = torch.reshape(S, (-1,) + self.output1_shape)
         return S
 
+
+class ram_network_convH(nn.Module):
+    def __init__(self, input_shape, output1_shape, hidden_size):
+        super().__init__()
+        self.input_shape = input_shape
+        self.output1_shape = output1_shape
+        self.hidden_size = hidden_size
+        self.train_count = 0
+        self.layer1_1 = nn.Conv1d(input_shape[1], 512, 8, stride=8, bias=False)
+        self.activation1_1 = nn.ReLU()
+        self.batchnorm1 = nn.BatchNorm1d(512)
+
+        self.layer1_2 = nn.Conv1d(256, 256, 3, bias=False)
+        self.activation1_2 = nn.ReLU()
+        self.batchnorm2 = nn.BatchNorm1d(256)
+
+        self.layer1_3 = nn.Linear(input_shape[0]*256, self.hidden_size)
+        self.activation1_3 = nn.ReLU()
+        self.batchnorm3 = nn.BatchNorm1d(self.hidden_size)
+
+        self.layer1_4 = nn.Linear(self.hidden_size, self.hidden_size//2)
+        self.activation1_4 = nn.ReLU()
+        self.batchnorm4 = nn.BatchNorm1d(self.hidden_size//2)
+
+        self.layer1_5 = nn.Linear(self.hidden_size // 2, self.hidden_size // 4)
+        self.activation1_5 = nn.ReLU()
+        self.batchnorm5 = nn.BatchNorm1d(self.hidden_size // 4)
+
+        self.layer1_6 = nn.Linear(self.hidden_size//4, np.prod(output1_shape))
+        self.activation1_6 = nn.ReLU()
+
+    def forward(self, x):
+        bs = x.shape[0]
+        ch = x.shape[1]
+        x_flat = x.view((bs, ch, x.shape[2]*x.shape[3]))  # Flatten
+        S = self.batchnorm1(self.activation1_1(self.layer1_1(x_flat)))
+        S = self.batchnorm2(self.activation1_2(self.layer1_2(S)))
+        S = self.batchnorm3(self.activation1_3(self.layer1_3(S)))
+        S = self.batchnorm4(self.activation1_4(self.layer1_4(S)))
+        S = self.batchnorm5(self.activation1_5(self.layer1_5(S)))
+        S = self.activation1_6(self.layer1_6(S))
+        S = torch.reshape(S, (-1,) + self.output1_shape)
+        return S
+
+class ram_network_convG(nn.Module):
+    def __init__(self, input_shape, latent_shape, hidden_size, support, transform):
+        super().__init__()
+        self.input_shape = input_shape
+        self.latent_shape = latent_shape
+        self.hidden_size = hidden_size
+        self.train_count = 0
+        # Values for output transformation
+        self.register_buffer('support', support)  # Register as buffer to avoid optimisation of values
+        self.transform = transform
+        self.log_softmaxer = nn.LogSoftmax(dim=1)
+
+        n_support = self.support.shape[0]
+
+        self.layer1_1 = nn.Conv1d(input_shape[0], 32, 1, bias=False)
+        self.activation1_1 = nn.ReLU()
+        self.batchnorm1 = nn.BatchNorm1d(32)
+
+        self.layer1_2 = nn.Conv1d(32, 16, 1, bias=False)
+        self.activation1_2 = nn.ReLU()
+        self.batchnorm2 = nn.BatchNorm1d(16)
+
+        self.layer1_3 = nn.Linear(input_shape[1]*input_shape[2]*16, self.hidden_size)
+        self.activation1_3 = nn.ReLU()
+        self.batchnorm3 = nn.BatchNorm1d(self.hidden_size)
+
+        self.layer1_4 = nn.Linear(self.hidden_size, self.hidden_size//2)
+        self.activation1_4 = nn.ReLU()
+        self.batchnorm4 = nn.BatchNorm1d(self.hidden_size//2)
+
+        # Split information to each of the two heads
+        # Hidden state head
+        self.layer1_5 = nn.Linear(self.hidden_size // 2, self.hidden_size // 4)
+        self.activation1_5 = nn.ReLU()
+        self.batchnorm5 = nn.BatchNorm1d(self.hidden_size // 4)
+
+        self.layer1_6 = nn.Linear(self.hidden_size//4, np.prod(latent_shape))
+        self.activation1_6 = nn.ReLU()
+
+        # Reward head
+        self.layer2_5 = nn.Linear(self.hidden_size // 2, self.hidden_size // 2)
+        self.activation2_5 = nn.ReLU()
+        self.batchnorm2_5 = nn.BatchNorm1d(self.hidden_size // 2)
+
+        self.layer2_6 = nn.Linear(self.hidden_size // 2, n_support)
+        torch.nn.init.ones_(self.layer2_6.weight)
+        self.activation2_6 = nn.LogSoftmax(dim=1)
+
+    def forward(self, x):
+        bs = x.shape[0]
+        ch = x.shape[1]
+        # Get latent state for residual connection
+        x_res = x[:, 0:self.latent_shape[0]]
+        x_flat = x.view((bs, ch, x.shape[2]*x.shape[3]))  # Flatten
+        S = self.batchnorm1(self.activation1_1(self.layer1_1(x_flat)))
+        S = self.batchnorm2(self.activation1_2(self.layer1_2(S)))
+        S_flat = S.view((bs, -1))
+        S = self.batchnorm3(self.activation1_3(self.layer1_3(S_flat)))
+        S = self.batchnorm4(self.activation1_4(self.layer1_4(S)))
+
+        # Head split
+        # This is the hidden state head
+        D = self.batchnorm5(self.activation1_5(self.layer1_5(S)))
+        D = self.activation1_6(self.layer1_6(D))
+        D = torch.reshape(D, (bs,) + self.latent_shape) + x_res
+
+        # Reward head
+        R = self.batchnorm2_5(self.activation2_5(self.layer2_5(S)))
+        R = self.activation2_6(self.layer2_6(R))
+        return D, R
+
+    def mean_pass(self, x):
+        state, non_mean_val = self.forward(x)
+        mean = self.dist2mean(non_mean_val.exp(), self.transform)
+        return state, mean
+
+    def dist2mean(self, dist, transform):
+        # This function is used to not repeat a forward pass to compute the mean value
+        mean = (self.support[None] * dist).sum(dim=1)
+        if transform == True:
+            mean = h_inverse_scale(mean)
+        elif transform == "non_inverse":
+            mean = h_scale(mean)
+        return mean
+
+
+class ram_network_convF(nn.Module):
+    def __init__(self, input_shape, action_shape, hidden_size, support, transform):
+        super().__init__()
+        self.input_shape = input_shape
+        self.action_shape = action_shape
+        self.hidden_size = hidden_size
+        self.train_count = 0
+        # Values for output transformation
+        self.register_buffer('support', support)  # Register as buffer to avoid optimisation of values
+        self.transform = transform
+        self.log_softmaxer = nn.LogSoftmax(dim=1)
+
+        n_support = self.support.shape[0]
+
+        self.layer1_1 = nn.Conv1d(input_shape[0], 32, 1, bias=False)
+        self.activation1_1 = nn.ReLU()
+        self.batchnorm1 = nn.BatchNorm1d(32)
+
+        self.layer1_2 = nn.Conv1d(32, 16, 1, bias=False)
+        self.activation1_2 = nn.ReLU()
+        self.batchnorm2 = nn.BatchNorm1d(16)
+
+        self.layer1_3 = nn.Linear(input_shape[1]*input_shape[2]*16, self.hidden_size)
+        self.activation1_3 = nn.ReLU()
+        self.batchnorm3 = nn.BatchNorm1d(self.hidden_size)
+
+        self.layer1_4 = nn.Linear(self.hidden_size, self.hidden_size//2)
+        self.activation1_4 = nn.ReLU()
+        self.batchnorm4 = nn.BatchNorm1d(self.hidden_size//2)
+
+        # Split information to each of the two heads
+        # Policy state head
+        self.layer1_5 = nn.Linear(self.hidden_size // 2, self.hidden_size // 4)
+        self.activation1_5 = nn.ReLU()
+        self.batchnorm5 = nn.BatchNorm1d(self.hidden_size // 4)
+
+        self.layer1_6 = nn.Linear(self.hidden_size//4, np.prod(action_shape))
+        torch.nn.init.ones_(self.layer1_6.weight)
+        self.activation1_6 = nn.LogSoftmax(dim=1)
+
+        # Value head
+        self.layer2_5 = nn.Linear(self.hidden_size // 2, self.hidden_size // 2)
+        self.activation2_5 = nn.ReLU()
+        self.batchnorm2_5 = nn.BatchNorm1d(self.hidden_size // 2)
+
+        self.layer2_6 = nn.Linear(self.hidden_size // 2, n_support)
+        torch.nn.init.ones_(self.layer2_6.weight)
+        self.activation2_6 = nn.LogSoftmax(dim=1)
+
+    def forward(self, x):
+        bs = x.shape[0]
+        ch = x.shape[1]
+        # Get latent state for residual connection
+        x_flat = x.view((bs, ch, x.shape[2]*x.shape[3]))  # Flatten
+        S = self.batchnorm1(self.activation1_1(self.layer1_1(x_flat)))
+        S = self.batchnorm2(self.activation1_2(self.layer1_2(S)))
+        S_flat = S.view((bs, -1))
+        S = self.batchnorm3(self.activation1_3(self.layer1_3(S_flat)))
+        S = self.batchnorm4(self.activation1_4(self.layer1_4(S)))
+
+        # Head split
+        # This is the policy head
+        P = self.batchnorm5(self.activation1_5(self.layer1_5(S)))
+        P = self.activation1_6(self.layer1_6(P))
+        P = torch.reshape(P, (bs,) + self.action_shape)
+
+        # value head
+        V = self.batchnorm2_5(self.activation2_5(self.layer2_5(S)))
+        V = self.activation2_6(self.layer2_6(V))
+        return P, V
+
+    def mean_pass(self, x):
+        policy, non_mean_val = self.forward(x)
+        mean = self.dist2mean(non_mean_val.exp(), self.transform)
+        return policy, mean
+
+    def dist2mean(self, dist, transform):
+        # This function is used to not repeat a forward pass to compute the mean value
+        mean = (self.support[None] * dist).sum(dim=1)
+        if transform == True:
+            mean = h_inverse_scale(mean)
+        elif transform == "non_inverse":
+            mean = h_scale(mean)
+        return mean
+
+
+class ram_network_convH(nn.Module):
+    def __init__(self, input_shape, output1_shape, hidden_size):
+        super().__init__()
+        self.input_shape = input_shape
+        self.output1_shape = output1_shape
+        self.hidden_size = hidden_size
+        self.train_count = 0
+        self.layer1_1 = nn.Conv1d(input_shape[0], 32, 1, bias=False)
+        self.activation1_1 = nn.ReLU()
+        self.batchnorm1 = nn.BatchNorm1d(32)
+
+        self.layer1_2 = nn.Conv1d(32, 16, 1, bias=False)
+        self.activation1_2 = nn.ReLU()
+        self.batchnorm2 = nn.BatchNorm1d(16)
+
+        self.layer1_3 = nn.Linear(input_shape[1]*16, self.hidden_size)
+        self.activation1_3 = nn.ReLU()
+        self.batchnorm3 = nn.BatchNorm1d(self.hidden_size)
+
+        self.layer1_4 = nn.Linear(self.hidden_size, self.hidden_size//2)
+        self.activation1_4 = nn.ReLU()
+        self.batchnorm4 = nn.BatchNorm1d(self.hidden_size//2)
+
+        self.layer1_5 = nn.Linear(self.hidden_size // 2, self.hidden_size // 4)
+        self.activation1_5 = nn.ReLU()
+        self.batchnorm5 = nn.BatchNorm1d(self.hidden_size // 4)
+
+        self.layer1_6 = nn.Linear(self.hidden_size//4, np.prod(output1_shape))
+        self.activation1_6 = nn.ReLU()
+
+    def forward(self, x):
+        bs = x.shape[0]
+        ch = x.shape[1]
+        x_flat = x.view((bs, ch, x.shape[2]))  # Flatten
+        S = self.batchnorm1(self.activation1_1(self.layer1_1(x_flat)))
+        S = self.batchnorm2(self.activation1_2(self.layer1_2(S)))
+        S_flat = S.view((bs, -1))
+        S = self.batchnorm3(self.activation1_3(self.layer1_3(S_flat)))
+        S = self.batchnorm4(self.activation1_4(self.layer1_4(S)))
+        S = self.batchnorm5(self.activation1_5(self.layer1_5(S)))
+        S = self.activation1_6(self.layer1_6(S))
+        S = torch.reshape(S, (-1,) + self.output1_shape)
+        return S
+
 class dummy_networkF(nn.Module):
     def __init__(self, input_shape, output1_shape, hidden_size, support, transform=True):
         super(dummy_networkF, self).__init__()
         self.input_shape = input_shape
         self.output1_shape = output1_shape
         self.hidden_size = hidden_size
-        self.support = support
+        self.register_buffer('support', support)  # Register as buffer to avoid optimisation of values
         self.transform = transform
         self.train_count = 0
         # Policy head
@@ -146,10 +406,17 @@ class dummy_networkF(nn.Module):
 
     def mean_pass(self, x):
         non_mean_val, dist = self.forward(x)
-        mean = (self.support[None]*dist.exp()).sum(dim=1)
-        if self.transform:
-            mean = h_inverse_scale(mean)
+        mean = self.dist2mean(dist.exp(), self.transform)
         return non_mean_val, mean
+
+    def dist2mean(self, dist, transform):
+        # This function is used to not repeat a forward pass to compute the mean value
+        mean = (self.support[None] * dist).sum(dim=1)
+        if transform == True:
+            mean = h_inverse_scale(mean)
+        elif transform == "non_inverse":
+            mean = h_scale(mean)
+        return mean
 
 class constant_networkF(nn.Module):
     def __init__(self, input_shape, output1_shape, hidden_size):
@@ -359,11 +626,11 @@ class muZero(nn.Module):
 
         return P_batches, v_batches, r_batches, p_vals
 
-def h_scale(x, epsilon = 0.01):
+def h_scale(x, epsilon = 0.001):
     y = torch.sign(x)*(torch.sqrt(torch.abs(x)+1)-1)+epsilon*x
     return y
 
-def h_inverse_scale(y, epsilon = 0.01):
+def h_inverse_scale(y, epsilon = 0.001):
     intermid = (torch.sqrt(1+4*epsilon*(torch.abs(y)+1+epsilon))-1)/(2*epsilon)
     x = torch.sign(y)*(intermid*intermid-1)
     return x

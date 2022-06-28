@@ -13,7 +13,7 @@ import numpy as np
 import torch.nn.functional as F
 from resnet_model import ResNet
 from torchvision.models.resnet import BasicBlock
-from models import identity_networkH, identity_networkF, dummy_networkF, dummy_networkH
+from models import identity_networkH, identity_networkF, dummy_networkF, dummy_networkH, ram_network_convG, ram_network_convH, ram_network_convF
 
 
 if __name__ == '__main__':
@@ -31,6 +31,7 @@ if __name__ == '__main__':
     MCTS_settings = {"n_parallel_explorations": 4,  # Number of pseudo-parrallel runs of the MCTS, note >16 reduces accuracy significantly
                      "action_size": (4,),  # size of action space
                      "observation_size": (2, 2),  # shape of observation space
+                     "observation_channels": 1,  # number of channels of observation space (i.e. 3*4 for RGB and 4x frame stack)
                      "hidden_S_size": (3, 3),  # Size of the hidden state
                      "hidden_S_channel": 1,  # Size of the hidden state
                      "gamma": 0.1}  # parameter for pUCT selection
@@ -52,6 +53,7 @@ if __name__ == '__main__':
                          "momentum": 0.9,  # Original was 0.9
                          "weight_decay": 1e-4,
                          "uniform_sampling": False,
+                         "scale_values": True,
                          }
     torch.manual_seed(0)
     np.random.seed(1)
@@ -64,6 +66,14 @@ if __name__ == '__main__':
     obs_size = MCTS_settings["observation_size"]
     action_size = MCTS_settings["action_size"]
     past_obs = experience_settings["past_obs"]
+    observation_shape = (experience_settings["past_obs"] * MCTS_settings["observation_channels"],) + MCTS_settings[
+        "observation_size"]  # input to f
+    hidden_shape = (MCTS_settings["hidden_S_channel"],) + MCTS_settings["hidden_S_size"]  # input to f
+    hidden_input_size = (MCTS_settings["action_size"][0] + MCTS_settings["hidden_S_channel"],) + MCTS_settings[
+        "hidden_S_size"]  # Input to g
+    n_heads = MuZero_settings["n_support"]
+    transform_values = training_settings["scale_values"]
+
 
     K = experience_settings["K"]
     ex_Q = Queue()
@@ -109,9 +119,10 @@ if __name__ == '__main__':
     wr_worker.start()
     n_heads = MuZero_settings["n_support"]
     support = torch.linspace(MuZero_settings["low_support"], MuZero_settings["high_support"], n_heads)
-    f_model = dummy_networkF(hidden_shape, action_size, 256, support)
-    g_model = ResNet_g(5, 256, MCTS_settings["hidden_S_size"], MCTS_settings["hidden_S_channel"], 2304, support)
-    h_model = dummy_networkH((experience_settings["past_obs"],) + MCTS_settings["observation_size"], hidden_shape, 256)
+
+    f_model = ram_network_convF(hidden_shape, MCTS_settings["action_size"], 1024, support, transform_values)
+    g_model = ram_network_convG(hidden_input_size, hidden_shape, 1024, support, transform_values)
+    h_model = ram_network_convH(observation_shape, hidden_shape, 128)
     trainer = model_trainer(f_model, g_model, h_model, EX_server, experience_settings, training_settings, MCTS_settings)
     # GPU things
     cuda = torch.cuda.is_available()
@@ -135,7 +146,7 @@ if __name__ == '__main__':
     time_end = time.time()
     duration = time_end - time_start
     print("Iterations pr. sec:" + str(round(100 / duration)))
-    #trainer.train()
+    trainer.train()
     wr_worker.terminate()
 
 

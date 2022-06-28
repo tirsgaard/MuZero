@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 # Import torch things
 import torch
 
+
 def gpu_worker(gpu_Q, input_shape, MCTS_settings, model, f_model, use_g_model):
     wr_Q = MCTS_settings["Q_writer"]
     torch.backends.cudnn.benchmark = True
@@ -41,7 +42,7 @@ def gpu_worker(gpu_Q, input_shape, MCTS_settings, model, f_model, use_g_model):
             queue_size = n_parallel_explorations * MCTS_queue
             while i < queue_size:
                 try:
-                    gpu_jobs, pipe = gpu_Q.get(True, 0.0001)  # Get jobs
+                    gpu_jobs, pipe = gpu_Q.get(True, 0.001)  # Get jobs
                     pipe_queue.append(pipe)  # Track job index with pipe index
                     num_jobs = gpu_jobs.shape[0]  # Get number of jobs send
                     jobs_indexes.append(num_jobs)  # Track number of jobs send
@@ -65,14 +66,15 @@ def gpu_worker(gpu_Q, input_shape, MCTS_settings, model, f_model, use_g_model):
                 time_spent = time.time() - t
                 t = time.time()
                 new_speed = num_eval / time_spent
-                calibration_done = new_speed < speed
+                calibration_done = new_speed < speed  # If speed is less, stop calibrating
                 speed = new_speed
 
                 f = open("speed.txt", "a")
                 print("Queue size:" + str(MCTS_queue) + "Evals pr. second: " + str(round(speed)), file=f)
                 f.close()
-
-                MCTS_queue += 1 - 2 * calibration_done  # The calibration is for going back to optimal size
+                MCTS_queue *= 2
+                if calibration_done:
+                    MCTS_queue = MCTS_queue//2  # The calibration is for going back to optimal size
                 batch = torch.empty((n_parallel_explorations * (MCTS_queue + 1),) + input_shape)
                 num_eval = 0
 
@@ -136,9 +138,11 @@ def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZe
     h_rec, h_send = Pipe(False)
 
     # Make environment
-    env = env_maker()
+    rendering = "human" if (game_id == 0) else "rgb_array"
+    env = env_maker(rendering)
     total_R = 0
     turns = 0
+    start_time = time.time()
     # Start game
     F_new = env.reset()
     # Loop over all turns in environment
@@ -161,14 +165,14 @@ def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZe
 
         # Compute action distribution from policy
         pi_legal = root_node.N / (root_node.N_total - 1)  # -1 to not count exploration of the root-node itself
-        temp = 0.25 + 0.995**game_id
+        temp = 0.25 + 0.75*0.99995**game_id
         pi_scaled = temperature_scale(pi_legal, temp)
 
         # Selecet action
         action = np.random.choice(n_actions, size=1, p=pi_scaled)[0]
 
         # Pick move
-        v = root_node.v[0]
+        v = root_node.W.sum()/(root_node.N_total-1)  # Average return. -1  to account for exploration of node itself
         F = F_new  # Store old obs
         F_new, r, done, info = env.step(action)
         total_R += r
@@ -179,6 +183,7 @@ def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZe
             # Check for termination of environment
             wr_Q.put(['scalar', 'environment/steps', turns, game_id])
             wr_Q.put(['scalar', 'environment/total_reward', total_R, game_id])
+            wr_Q.put(['scalar', 'environment/iter_pr_sec', turns/(time.time()-start_time), game_id])
             env.close()
             # tree = map_tree(root_node, normalizer, game_id)
             break
@@ -224,7 +229,7 @@ def sim_games(env_maker, f_model, g_model, h_model, EX_Q, MCTS_settings, MuZero_
         p.start()
     # Construct tasks for workers
     procs = []
-    torch.multiprocessing.set_start_method('fork', force=True)
+    torch.multiprocessing.set_start_method('spawn', force=True)
     for i in range(number_of_processes):
         seed = np.random.randint(int(2 ** 31))
         procs.append(Process(target=sim_game_worker,
@@ -255,7 +260,6 @@ def sim_games(env_maker, f_model, g_model, h_model, EX_Q, MCTS_settings, MuZero_
     # Close processes
     for p in process_workers:
         p.terminate()
-
 
 
 

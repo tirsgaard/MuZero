@@ -19,6 +19,8 @@ from storage_functions import experience_replay_server
 from torch.utils.tensorboard import SummaryWriter
 from models import muZero, calc_support_dist
 import warnings
+import copy
+
 # 1. Disabled functions: action appending of hidden dynamic state
 # 2. Exponential reduction of learning rate, instead reduce on platau
 # 3. Unrolling of K
@@ -118,7 +120,7 @@ def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta, n_iter=0, mean=True):
     reward_error = cross_entropy(u, r)
     value_error = cross_entropy(z, v)
     policy_error = cross_entropy(pi, P)
-    total_error = reward_error + value_error + policy_error*(1-0.99995**n_iter)
+    total_error = reward_error + value_error + policy_error*(1-0.997**np.log(n_iter+1))
     total_error = (total_error/(P_imp[:, None] * N))**beta  # Scale gradient with importance weighting
     if mean:
         return total_error.mean(), reward_error.mean(), value_error.mean(), policy_error.mean()
@@ -146,17 +148,29 @@ class model_trainer:
         self.hidden_S_size = MCTS_settings["hidden_S_size"]
         self.action_size = MCTS_settings["action_size"]
         self.wr_Q = MCTS_settings["Q_writer"]
-        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        if training_settings["use_different_gpu"]:
+            self.device = torch.device('cuda:' + str(torch.cuda.device_count()-1))
+        else:
+            self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        torch.cuda.set_device(self.device)
         self.training_counter = 0
 
         # Check for cuda
         # GPU things
         self.cuda = torch.cuda.is_available()
-        # Learner
+        # Inference model
         self.f_model = f_model
         self.g_model = g_model
         self.h_model = h_model
-        self.muZero = muZero(self.f_model, self.g_model, self.h_model, self.K, self.hidden_S_size, self.action_size)
+        # Training model
+        self.f_model_train = copy.deepcopy(self.f_model)
+        self.g_model_train = copy.deepcopy(self.g_model)
+        self.h_model_train = copy.deepcopy(self.h_model)
+        self.f_model_train.to(self.device)
+        self.g_model_train.to(self.device)
+        self.h_model_train.to(self.device)
+
+        self.muZero = muZero(self.f_model_train, self.g_model_train, self.h_model_train, self.K, self.hidden_S_size, self.action_size)
         #self.optimizer = optim.SGD(self.muZero.parameters(), lr=self.lr_init, momentum=self.momentum, weight_decay=self.weight_decay)
         self.optimizer = optim.Adam(self.muZero.parameters(), lr=self.lr_init, weight_decay=self.weight_decay)
         self.criterion = muZero_games_loss
@@ -172,27 +186,30 @@ class model_trainer:
         return converted
 
     def train(self):
-        self.f_model.to(self.device).train()
-        self.g_model.to(self.device).train()
-        self.h_model.to(self.device).train()
+        self.f_model_train.train()
+        self.g_model_train.train()
+        self.h_model_train.train()
 
         length_training = self.num_epochs
         start_time = time.time()
         # Train
         for i in range(length_training):
-            # Generate batch. Note we uniform sample instead of epoch as in the original paper
-            S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, batch_idx, P_imp, N_count = self.ER.return_batches(self.BS,
-                                                                                                            self.alpha,
-                                                                                                            self.K,
-                                                                                                            uniform_sampling=self.uniform_sampling)
-            S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp = self.convert_torch([S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp])
-            u_support_batch, u_scaled = calc_support_dist(u_batch, self.g_model.support, scale_value=self.scale_values)
-            z_support_batch, z_scaled = calc_support_dist(z_batch, self.f_model.support, scale_value=self.scale_values)
-            assert(torch.all(torch.isclose(pi_batch.sum(dim=2), torch.tensor(1.))))
-            assert(torch.all(torch.isclose(u_support_batch.sum(dim=2), torch.tensor(1.))))
-            assert(torch.all(torch.isclose(z_support_batch.sum(dim=2), torch.tensor(1.))))
-            assert(torch.all(torch.isclose((self.g_model.support[None]*u_support_batch.view(self.BS*self.K, -1)).sum(dim=1), u_scaled.view(-1), atol=1e-06)))
-            assert(torch.all(torch.isclose((self.f_model.support[None]*z_support_batch.view(self.BS*self.K, -1)).sum(dim=1), z_scaled.view(-1), atol=1e-06)))
+            with torch.no_grad():
+                # Generate batch
+                S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, batch_idx, P_imp, N_count = self.ER.return_batches(self.BS,
+                                                                                                                self.alpha,
+                                                                                                                self.K,
+                                                                                                                uniform_sampling=self.uniform_sampling)
+                S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp = self.convert_torch([S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp])
+                print(u_batch.device)
+                print(self.g_model_train.support.device)
+                u_support_batch, u_scaled = calc_support_dist(u_batch, self.g_model_train.support, scale_value=self.scale_values)
+                z_support_batch, z_scaled = calc_support_dist(z_batch, self.f_model_train.support, scale_value=self.scale_values)
+                assert(torch.all(torch.isclose(pi_batch.sum(dim=2), torch.tensor(1.))))
+                assert(torch.all(torch.isclose(u_support_batch.sum(dim=2), torch.tensor(1.))))
+                assert(torch.all(torch.isclose(z_support_batch.sum(dim=2), torch.tensor(1.))))
+                assert(torch.all(torch.isclose(self.g_model_train.dist2mean(u_support_batch.view(self.BS*self.K, -1), None), u_scaled.view(-1), atol=1e-06)))
+                assert(torch.all(torch.isclose(self.f_model_train.dist2mean(z_support_batch.view(self.BS*self.K, -1), None), z_scaled.view(-1), atol=1e-06)))
 
 
             # Optimize
@@ -209,14 +226,23 @@ class model_trainer:
 
             self.ER.update_weightings(p_vals.mean(axis=1), batch_idx)
 
+            # Save model
+            if self.muZero.n_updates % 1000 == 0:
+                torch.save({'muzero_state_dict': self.muZero.state_dict(),
+                            'f_model_state_dict': self.f_model_train.state_dict(),
+                            'g_model_state_dict': self.g_model_train.state_dict(),
+                            'h_model_state_dict': self.h_model_train.state_dict(),
+                            'optimizer_state_dict': self.optimizer.state_dict()},
+                           "checkpoints/MuZero_model_" + str(self.muZero.n_updates))
+
             # Log summary statistics
             if self.training_counter % 100 == 1:
                 # Log summary statistics
                 self.wr_Q.put(['dist', 'Output/v', v_batches.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Output/P', P_batches.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Output/r', r_batches.detach().cpu(), self.training_counter])
-                r_trans = (self.g_model.support[None]*u_support_batch.view(self.BS*self.K, -1)).sum(dim=1)
-                v_trans = (self.f_model.support[None]*z_support_batch.view(self.BS*self.K, -1)).sum(dim=1)
+                r_trans = self.g_model_train.dist2mean(r_batches.view(self.BS*self.K, -1).exp(), self.scale_values)
+                v_trans = self.f_model_train.dist2mean(v_batches.view(self.BS*self.K, -1).exp(), self.scale_values)
                 self.wr_Q.put(['dist', 'Output/transformed_r', r_trans.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Output/transformed_v', v_trans.detach().cpu(), self.training_counter])
                 # Check for biases of actions
@@ -225,7 +251,10 @@ class model_trainer:
                 self.wr_Q.put(['scalar', 'stats/action0_play', (a_batch == 0).to(torch.float).mean().detach().cpu(),
                                self.training_counter])
 
-
+                u_trans = self.g_model_train.dist2mean(u_support_batch.view(self.BS * self.K, -1), self.scale_values)
+                z_trans = self.f_model_train.dist2mean(z_support_batch.view(self.BS * self.K, -1), self.scale_values)
+                self.wr_Q.put(['dist', 'data/u_retransformed',  u_trans.detach().cpu(), self.training_counter])
+                self.wr_Q.put(['dist', 'data/z_retransformed', z_trans.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'data/u', u_batch.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'data/z', z_batch.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'data/Pi', pi_batch.detach().cpu(), self.training_counter])
@@ -240,84 +269,16 @@ class model_trainer:
                 self.wr_Q.put(
                     ['dist', 'replay/priority_dist', (N_count * P_imp).detach().cpu(), self.training_counter])
 
-
-                # Check accuracy change over unrolls
-                loss, r_loss, v_loss, P_loss = self.criterion(u_support_batch, r_batches,
-                                                              z_support_batch, v_batches,
-                                                              pi_batch, P_batches,
-                                                              P_imp, self.ER.N, self.beta,  mean=False)
-                loss_median, _ = loss.median(dim=0)
-                r_loss_median, _ = r_loss.median(dim=0)
-                v_loss_median, _ = v_loss.median(dim=0)
-                P_loss_median, _ = P_loss.median(dim=0)
-                for k in range(1, self.K):
-                    self.wr_Q.put(['scalar', 'unrolling_errors/loss' + str(k + 1),
-                                   (loss_median[k]/loss_median[0]).detach().cpu(),
-                                   self.training_counter])
-                    self.wr_Q.put(['scalar', 'unrolling_errors/r_loss' + str(k + 1),
-                                   (r_loss_median[k] / r_loss_median[0]).detach().cpu(),
-                                   self.training_counter])
-                    self.wr_Q.put(['scalar', 'unrolling_errors/v_loss' + str(k + 1),
-                                   (v_loss_median[k] / v_loss_median[0]).detach().cpu(),
-                                   self.training_counter])
-                    self.wr_Q.put(['scalar', 'unrolling_errors/P_loss' + str(k + 1),
-                                   (P_loss_median[k] / P_loss_median[0]).detach().cpu(),
-                                   self.training_counter])
-                # Log gradients
-                # Weights
-                i = 0
-                gradients = []
-                for parms in list(self.f_model.parameters()):
-                    self.wr_Q.put(['dist', 'training/model_f/layer' + str(i), parms.detach().cpu(),
-                                   self.training_counter])
-                    self.wr_Q.put(['dist', 'gradient/model_f/layer' + str(i), torch.abs(parms.grad).detach().cpu(),
-                                   self.training_counter])
-                    self.wr_Q.put(['scalar', 'mean_gradient/model_f/layer' + str(i), torch.abs(parms.grad).mean().detach().cpu(),
-                                   self.training_counter])
-                    gradients.append(torch.abs(parms.grad).mean().detach().cpu())
-                    i += 1
-                mean_grad = torch.median(torch.tensor(gradients))
-                self.wr_Q.put(
-                    ['scalar', 'median_gradient/model_f', mean_grad.detach().cpu(), self.training_counter])
-
-                i = 0
-                gradients = []
-                for parms in list(self.g_model.parameters()):
-                    self.wr_Q.put(
-                        ['dist', 'training/model_g/layer' + str(i), parms.detach().cpu(),
-                         self.training_counter])
-                    self.wr_Q.put(['dist', 'gradient/model_g/layer' + str(i), torch.abs(parms.grad).detach().cpu(),
-                                   self.training_counter])
-                    self.wr_Q.put(
-                        ['scalar', 'mean_gradient/model_g/layer' + str(i), torch.abs(parms.grad).mean().detach().cpu(),
-                         self.training_counter])
-                    gradients.append(torch.abs(parms.grad).mean().detach().cpu())
-                    i += 1
-                mean_grad = torch.median(torch.tensor(gradients))
-                self.wr_Q.put(['scalar', 'median_gradient/model_g', mean_grad.detach().cpu(), self.training_counter])
-
-                i = 0
-                gradients = []
-                for parms in list(self.h_model.parameters()):
-                    self.wr_Q.put(
-                        ['dist', 'training/model_h/layer' + str(i), parms.detach().cpu(),
-                         self.training_counter])
-                    self.wr_Q.put(['dist', 'gradient/model_h/layer' + str(i), torch.abs(parms.grad).detach().cpu(),
-                                   self.training_counter])
-                    self.wr_Q.put(
-                        ['scalar', 'mean_gradient/model_h/layer' + str(i), torch.abs(parms.grad).mean().detach().cpu(),
-                         self.training_counter])
-                    gradients.append(torch.abs(parms.grad).mean().detach().cpu())
-                    i += 1
-                mean_grad = torch.median(torch.tensor(gradients))
-                self.wr_Q.put(['scalar', 'median_gradient/model_h', mean_grad.detach().cpu(), self.training_counter])
-
             self.training_counter += 1
+        # Update network weights
+        self.f_model.load_state_dict(self.f_model_train.state_dict())
+        self.g_model.load_state_dict(self.g_model_train.state_dict())
+        self.h_model.load_state_dict(self.h_model_train.state_dict())
+        time.sleep(0.01)
+        # Also time iteration
         end_time = time.time()
         speed = length_training / (end_time - start_time)
         self.wr_Q.put(['scalar', 'Other/iterations_pr_sec', speed, self.training_counter])
-
-
 
 
 def train_ex_worker(ex_Q, f_model, g_model, h_model, experience_settings, training_settings, MCTS_settings):
@@ -371,7 +332,7 @@ def write_point(writer, type, name, value, index):
 def writer_worker(wr_Q):
     np.random.seed(0)
     writer = SummaryWriter()
-    name_list = ["environment/steps", "environment/total_reward"]
+    name_list = ["environment/steps", "environment/total_reward", "environment/iter_pr_sec"]
     updater = fix_out_of_order(name_list, writer)
     while True:
         # Empty queue
