@@ -176,6 +176,9 @@ class valueHead(nn.Module):
         self.ff_layer1 = nn.Sequential(nn.Linear(output_size, filter_size, bias=True),
                                        activation_func(activation), nn.BatchNorm1d(filter_size))
         self.ff_layer2 = nn.Linear(filter_size, heads)
+        torch.nn.init.constant_(self.ff_layer2.weight, 1)
+        torch.nn.init.constant_(self.ff_layer2.bias, 1000)
+        #torch.nn.init.ones_(self.ff_layer2.weight)
         #self.tanh_layer = nn.Tanh()
 
     def forward(self, x):
@@ -200,6 +203,7 @@ class ResNet(nn.Module):
         policy = self.policyHead(x)
         value = self.valueHead(x)
         return [policy, value]
+
 
 class ConvResNet(nn.Module):
     def __init__(self, in_channels, filter_size, output_shape, *args, **kwargs):
@@ -298,13 +302,22 @@ class ResNet_g(nn.Module):
     def forward(self, x):
         x = self.encoder(x)
         state = self.StateHead(x)
+        min_s = state.view(state.shape[0], -1).min(dim=1)[0]  # Min value pr. sample
+        max_s = state.view(state.shape[0], -1).max(dim=1)[0]  # Max value pr. sample
+        state = (state - min_s[:, None, None, None]) / (max_s[:,None, None, None] - min_s[:,None, None, None])  # Normalize S to stabelize learning
         value = self.log_softmaxer(self.valueHead(x))
         return [state, value]
 
     def mean_pass(self, x):
-        non_mean_val, dist = self.forward(x)
-        mean = (self.support[None]*dist.exp()).sum(dim=1)
-        if self.transform:
-            mean = h_inverse_scale(mean)
-        return non_mean_val, mean
+        state, non_mean_val = self.forward(x)
+        mean = self.dist2mean(non_mean_val.exp(), self.transform)
+        return state, mean
 
+    def dist2mean(self, dist, transform):
+        # This function is used to not repeat a forward pass to compute the mean value
+        mean = (self.support[None] * dist).sum(dim=1)
+        if transform == True:
+            mean = h_inverse_scale(mean)
+        elif transform == "non_inverse":
+            mean = h_scale(mean)
+        return mean

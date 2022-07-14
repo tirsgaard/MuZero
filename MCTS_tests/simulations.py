@@ -112,13 +112,13 @@ def explore_parallel_noise_tree(N_data_points, agents, n_parallel, C, c_change, 
     c_change = c_change  # 0.5
     noise = True
 
-    tree_shape = (N_bandits, )
+    tree_shape = (N_bandits, N_bandits, N_bandits)
     depth = len(tree_shape)
 
     ##### Construct tree
     # Construct leafs
-    alphas = np.full(tree_shape, 0.5)
-    betas = np.full(tree_shape, 0.5)
+    alphas = np.full(tree_shape, 2)
+    betas = np.full(tree_shape, 5)
     child_array = np.empty(tree_shape, dtype="object")
     for idx, parrent in np.ndenumerate(child_array):
         child_array[idx] = [alphas[idx], betas[idx]]
@@ -175,10 +175,14 @@ def explore_parallel_noise_tree(N_data_points, agents, n_parallel, C, c_change, 
             a, b = dist_tree[d][idx]
             p = mu_tree[d][idx]
             # Calculate contracted dist
-            a_cont = p * C
-            b_cont = C - p * C
+            a_cont = np.clip(p * C, 10**-5, None)
+            b_cont = np.clip(C - p * C, 10**-5, None)
             if noise:
-                p_new = beta.rvs(a_cont, b_cont)
+                try:
+                    p_new = beta.rvs(a_cont, b_cont)
+                except:
+                    print(a_cont)
+                    print(b_cont)
                 p_new = c_change * p_new + (1-c_change)*p
                 a_cont = p_new * C
                 b_cont = C - p_new * C

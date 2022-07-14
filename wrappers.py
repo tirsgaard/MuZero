@@ -112,16 +112,18 @@ class RAMAndSkipEnv(gym.Wrapper):
                 for j in range(i+1, self.skip):
                     self.obs_array[j] = self.obs_array[j - 1]
                 break
-        frames = self.obs_array.astype(np.float32)
+        frames = self.obs_array.astype(np.float32)/256
         return frames, total_reward, done, info
 
     def reset(self):
         obs = self.env.reset()
         if self.bits:
-            obs = np.unpackbits(obs).reshape(32, 32).astype(np.float32)
+            obs = np.unpackbits(obs).reshape(32, 32).astype(np.float32)/256  # /256 for normalisation
         obs_array = np.repeat(obs.astype(np.float32)[None], self.skip, axis=0)
         return obs_array
 
 
 def RAM_Breakout(render):
-    return RAMAndSkipEnv(gym.make("ALE/Breakout-v5", full_action_space=False, obs_type="ram", render_mode=render), skip=4)
+    return RAMAndSkipEnv(gym.make("ALE/Breakout-v5", full_action_space=False, obs_type="ram", render_mode=render), skip=2, bits=False)
+
+

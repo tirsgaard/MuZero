@@ -7,6 +7,7 @@ from storage_functions import experience_replay_sender, frame_stacker
 from MCTS import MCTS, generate_root, map_tree, verify_nodes
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+from scipy.stats import norm
 
 # Import torch things
 import torch
@@ -79,6 +80,7 @@ def gpu_worker(gpu_Q, input_shape, MCTS_settings, model, f_model, use_g_model):
                 num_eval = 0
 
 
+
 def f_g_process(batch, pipe_queue, jobs_indexes, g_model, f_model, num_eval, wr_Q):
     # Function for processing jobs for booth dynamic (g) and value (f) evaluation model
     # Process data
@@ -86,8 +88,8 @@ def f_g_process(batch, pipe_queue, jobs_indexes, g_model, f_model, num_eval, wr_
     result = f_model.mean_pass(S)
     S = S.cpu().numpy()
     u = u.cpu().numpy()
-    P = result[0].exp().cpu().numpy()  # Exponentiate log output
-    v = result[1].cpu().numpy()
+    P = result[0]
+    v = result[1]
     index_start = 0
     # Send processed jobs to all threads
     for jobs_index in jobs_indexes:
@@ -106,8 +108,8 @@ def h_f_process(batch, pipe_queue, jobs_indexes, h_model, f_model, num_eval, wr_
     S = h_model.forward(batch)
     result = f_model.mean_pass(S)
     S = S.cpu().numpy()
-    P = result[0].exp().cpu().numpy()  # Exponentiate log output
-    v = result[1].cpu().numpy()
+    P = result[0]  # Exponentiate log output
+    v = result[1]
     index_start = 0
     # Send processed jobs to all threads
     for jobs_index in jobs_indexes:
@@ -121,6 +123,40 @@ def h_f_process(batch, pipe_queue, jobs_indexes, h_model, f_model, num_eval, wr_
 def temperature_scale(N, temp):
     N_temp = N**(1/temp)
     return N_temp/np.sum(N_temp)
+
+def visit_select(root_node, game_id):
+    # Compute action distribution from policy
+    pi_legal = root_node.N / (root_node.N_total - 1)  # -1 to not count exploration of the root-node itself
+    temp = 0.25 + 0.75 * 0.99995 ** game_id
+    pi_scaled = temperature_scale(pi_legal, temp)
+
+    # Selecet action
+    action = np.random.choice(pi_scaled.shape[0], size=1, p=pi_scaled)[0]
+    return action, pi_legal
+
+def bayesian_select(root_node, game_id):
+    # Compute action distribution proportional to chance of being optimal action
+    min_dist = np.argmin(root_node.mu)
+    min_val = root_node.mu[min_dist] - 2*root_node.sigma_squared[min_dist]
+    max_dist = np.argmax(root_node.mu)
+    max_val = root_node.mu[max_dist] + 2 * root_node.sigma_squared[max_dist]
+    x_range = np.linspace(min_val, max_val, 10 ** 3)  # Resolution of interation
+    n_child = root_node.Q.shape[0]
+    # Store calculations
+    pdfs = np.stack([norm.pdf(x_range, root_node.mu[i], root_node.sigma_squared[i]) for i in range(n_child)])
+    cdfs = np.stack([norm.cdf(x_range, root_node.mu[i], root_node.sigma_squared[i]) for i in range(n_child)])
+
+    # Calculate chance of each child being the optimal
+    P = np.empty((n_child, ))
+    for i in range(n_child):
+        P[i] = np.mean(pdfs[i] * np.prod(cdfs[np.arange(n_child) != i], axis=0))  # Mean to reduce overflow
+    P = P / P.sum() # Now make sum to 1, as we are not integrating
+    # Scale P with temperature
+    temp = 0.25 + 0.75 * 0.99995 ** game_id
+    pi_scaled = temperature_scale(P, temp)
+    # Selecet action
+    action = np.random.choice(pi_scaled.shape[0], size=1, p=pi_scaled)[0]
+    return action, P
 
 
 def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZero_settings, experience_settings):
@@ -151,7 +187,7 @@ def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZe
         #env.render()
         S_obs = frame_stack.get_stack(F_new)
         # Check for error
-        root_node = generate_root(S_obs, h_Q, f_g_Q, h_send, h_rec, f_g_send, f_g_rec, MCTS_settings)
+        root_node = generate_root(S_obs, h_Q, h_send, h_rec, MCTS_settings)
         root_node, normalizer = MCTS(root_node, f_g_Q, MCTS_settings)
 
         # Generate new tree, to throw away old values
@@ -163,27 +199,28 @@ def sim_game(env_maker, game_id, agent_id, f_g_Q, h_Q, EX_Q, MCTS_settings, MuZe
                 env_image = env.render(mode="rgb_array")
                 plt.imsave('MCT_graphs/' + str(game_id) + '_env_image' + '.jpeg', env_image)
 
-        # Compute action distribution from policy
-        pi_legal = root_node.N / (root_node.N_total - 1)  # -1 to not count exploration of the root-node itself
-        temp = 0.25 + 0.75*0.99995**game_id
-        pi_scaled = temperature_scale(pi_legal, temp)
+        # Compute action distribution from policy and select action
+        if MuZero_settings["bayesian"]:
+            action, p = bayesian_select(root_node, game_id)
+            v, sigma = root_node.calc_max_dist()  # Value is max distribution over children
+            context = np.stack([root_node.mu, root_node.sigma_squared], axis=-1)  # Contexts is array[mu, sigma**2] for actions
+            # Add uncertanty to context
+            context[action, 1] = sigma*(MCTS_settings["gamma"]**(experience_settings["n_bootstrap"]*2))
+        else:
+            action, context = visit_select(root_node, game_id)
+            v = root_node.W.sum() / (root_node.N_total - 1)  # Average return. -1  to account for exploration of node itself
 
-        # Selecet action
-        action = np.random.choice(n_actions, size=1, p=pi_scaled)[0]
-
-        # Pick move
-        v = root_node.W.sum()/(root_node.N_total-1)  # Average return. -1  to account for exploration of node itself
         F = F_new  # Store old obs
         F_new, r, done, info = env.step(action)
         total_R += r
         # Save Data
-        ER.store(F, action, r, done, v, pi_legal)
+        ER.store(F, action, r, done, v, context)
 
         if done:
             # Check for termination of environment
             wr_Q.put(['scalar', 'environment/steps', turns, game_id])
             wr_Q.put(['scalar', 'environment/total_reward', total_R, game_id])
-            wr_Q.put(['scalar', 'environment/iter_pr_sec', turns/(time.time()-start_time), game_id])
+            wr_Q.put(['scalar', 'environment/iter_pr_sec', MCTS_settings["N_MCTS_sim"]*turns/(time.time()-start_time), game_id])
             env.close()
             # tree = map_tree(root_node, normalizer, game_id)
             break

@@ -323,7 +323,6 @@ class Bays_agent_Gauss_beta:
         if self.min_node:
             a = np.argmin(self.Q - np.sqrt(self.c * np.log(self.i) * self.Sigmas), axis=0)
         else:
-
             disc = np.log(self.i) if self.i>0 else float("inf")
             temp = self.Q + np.sqrt(self.c * disc * self.Sigmas)
             a = np.argmax(temp, axis=0)
@@ -469,6 +468,8 @@ class Bays_agent_vector_UCT2:
         self.min_node = min_node
         self.N_bandits = N_bandits
         self.c = c
+        self.vl = 3
+        self.explored = False
         self.temp = 1
         self.noise = 0.002551020408
         self.i = 0
@@ -479,7 +480,6 @@ class Bays_agent_vector_UCT2:
             self.criteria = self.thompson
         elif criteria == "thompson_bayes":
             self.criteria = self.thompson
-
 
     def max_dist(self, mu1, mu2):
         # Use cumsum for O(N) scaling. Alternative is outer product
@@ -538,7 +538,6 @@ class Bays_agent_vector_UCT2:
         sigma = (theta * self.support_squared).sum() - mean * mean
         return mean, sigma, theta
 
-
     def get_dist(self):
         if self.type == "thompson_bayes":
             mu, sigma, theta = self.calc_thompson_dist()
@@ -568,40 +567,43 @@ class Bays_agent_vector_UCT2:
     def act(self):
         return self.criteria()
 
-    def set_context(self, P, is_leaf=False):
+    def set_context(self, alphas, betas, is_leaf=False):
+        self.theta_count[:, 0] = betas
+        self.theta_count[:, -1] = alphas
         if self.context == "UCT1":
-            self.Q[:, 0] = P[:, 0]
-            self.Sigmas[:, 0] = self.noise
+            alphabeta = alphas + betas
+            self.Q[:, 0] = alphas / alphabeta
+            self.Sigmas[:, 0] = alphas * betas / ((alphabeta + 1) * alphabeta * alphabeta)
             if is_leaf:
-                Q = P[:, 0]
-                S = self.noise
-                alpha = -Q * (Q * Q - Q + S) / S
-                self.theta_count[:, -1] = alpha
-                beta = (Q * Q - Q + S) * (Q - 1) / S
-                self.theta_count[:, 0] = beta
-                for a in range(alpha.shape[0]):
-                    self.theta[a] = beta_to_theta(alpha[a], beta[a], self.support)
-        self.P = temperature_scale(P, self.temp, np.sqrt(self.noise))
+                for a in range(alphas.shape[0]):
+                    self.theta[a] = beta_to_theta(alphas[a], betas[a], self.support)
 
-    def update_theta(self, a, r):
+    def update_theta(self, a, r, vl=False, undo_vl=False):
+        vl_multiplier = self.vl if vl else 1
         lowest, highest = nearest_support(r, self.support)
         low_val = self.support[lowest]
         high_val = self.support[highest]
         lowest_p = (r - high_val) / (low_val - high_val)
         # Spread reward observation over support
-        self.theta_count[a, lowest] += lowest_p
-        self.theta_count[a, highest] += 1 - lowest_p
+        if undo_vl:
+            self.theta_count[a, lowest] -= vl_multiplier * lowest_p
+            self.theta_count[a, highest] -= vl_multiplier * (1 - lowest_p)
+        else:
+            self.theta_count[a, lowest] += vl_multiplier*lowest_p
+            self.theta_count[a, highest] += vl_multiplier*(1 - lowest_p)
 
     def get_greedy_action(self):
         a = np.argmax(self.Q)
         return a
 
-    def backup(self, a, r, extra=None):
-        self.n_obs[a, range(self.n_sim)] += 1
-        self.i += 1
+    def backup(self, a, r, extra=None, vl=False):
+        self.explored = (not vl) or self.explored  # don't explore if virtual
+        n_visits = self.vl if vl else 1
+        self.n_obs[a, range(self.n_sim)] += n_visits
+        self.i += n_visits
         if extra is None:
             # Add observation and normalize leaf
-            self.update_theta(a, r)
+            self.update_theta(a, r, vl=vl)
             # Try using beta prior
             beta = self.theta_count[a, 0]
             alpha = self.theta_count[a, -1]
@@ -626,6 +628,30 @@ class Bays_agent_vector_UCT2:
                 mu, sigma, theta = self.calc_max_dist()
         return mu, sigma, theta
 
+    def undo_vl(self, a, r, extra_info=None):
+        self.n_obs[a, range(self.n_sim)] -= self.vl
+        self.i -= self.vl
+        if extra_info is None:
+            # Case where bandit is at a leaf node
+            self.update_theta(a, r, vl=True, undo_vl=True)
+            # Try using beta prior
+            beta = self.theta_count[a, 0]
+            alpha = self.theta_count[a, -1]
+            self.theta[a] = beta_to_theta(alpha, beta, self.support)
+            # Case where bandit is at a leaf node
+            mean_return = self.get_mean(alpha, beta)  # (self.theta[a]*self.support).sum()
+            self.Q[a, range(self.n_sim)] = mean_return
+            self.Sigmas[a, range(self.n_sim)] = alpha * beta / ((alpha + beta) ** 2 * (alpha + beta + 1))
+        else:
+            # Case where bandit is not a leaf node
+            mu, sigma, theta = extra_info
+            self.Q[a, range(self.n_sim)] = mu
+            self.Sigmas[a, range(self.n_sim)] = sigma
+            self.theta[a] = theta
+        # Calculate own bandit distribution
+        mu, sigma, theta = self.get_dist()
+        return mu, sigma, theta
+
 def nearest_support(input, support):
     diffs = input - support
     diffs[diffs <= 0] = float("Inf")  # Only look for negative smallest values
@@ -634,6 +660,9 @@ def nearest_support(input, support):
     return lowest, highest
 
 def beta_to_theta(alpha, beta, support):
+    support = support.copy()
+    support[0] += 10**-4
+    support[-1] -= 10**-4
     theta = support**(alpha-1) * (1-support)**(beta-1)#scipy.stats.beta(alpha, beta)
     #theta = rv.pdf(support)
     theta = theta / theta.sum()

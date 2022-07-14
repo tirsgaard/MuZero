@@ -13,6 +13,7 @@ class experience_replay_server:
         self.n_actions = np.prod(self.action_size)
         self.obs_size = MCTS_settings["observation_size"]
         self.past_obs = experience_settings["past_obs"]  # Number of past observations to stack
+        self.bayes = MCTS_settings["bayesian"]
 
         # This will be handled as a circular array,
         #     so the array start can be moved when a new sequence having to reformat the whole array
@@ -170,10 +171,15 @@ class experience_replay_server:
         a_batch = np.random.randint(0, self.n_actions, size=(batch_size, K))
         r_batch = np.zeros((batch_size, K), dtype=np.float32)
         done_batch = np.ones((batch_size, K))
-        # Action density
-        a_dens = 1 / self.n_actions  # Predefine for skip having to calc for all values filled in array
-        pi_batch = np.full((batch_size, K, self.n_actions), a_dens, dtype=np.float32)
         z_batch = np.zeros((batch_size, K), dtype=np.float32)
+        if self.bayes:
+            pi_batch = np.zeros((batch_size, K, self.n_actions, 2), dtype=np.float32)
+            pi_batch[:, :, :, 1] = 10**-5  # Set variance to very low
+        else:
+        # Action density
+            a_dens = 1 / self.n_actions  # Predefine for skip having to calc for all values filled in array
+            pi_batch = np.full((batch_size, K, self.n_actions), a_dens, dtype=np.float32)
+
 
         S_arrays, a_arrays, r_arrays, done_arrays, v_arrays, pi_arrays, z_arrays = map(list, zip(*sequences))
         for i in range(len(sequences)):

@@ -8,20 +8,16 @@ import pickle
 
 if __name__ == '__main__':
     np.random.seed(2)
-    n_threads = 14
-    N_rep = n_threads*40  # Number of repeat simulations over parallel workers for reducing variance # 400*3000 is enough for UCB
+    n_threads = 16
+    N_rep = n_threads*50  # Number of repeat simulations over parallel workers for reducing variance # 400*3000 is enough for UCB
     n_sim = 5  # Number of in-thread simulations
-    N_data_points = 10000  # Number of steps to go
+    N_data_points = 1000  # Number of steps to go
     noise = 0.000000001
     n_parallel = 1
     #agent_opt1 = [2,True, np.linspace(0, 1, 4000), "UCT1"]
     agent_opt2 = [2, True, "UCT1_extracontext", 1, noise]
-    agent_opt3 = [2, "epsilon", 0.25, noise]
-    agent_opt4 = [2, "epsilon", 0.5, noise]
-    agent_opt5 = [2, "epsilon", 0.75, noise]
-    agent_opt6 = [2, "epsilon", 1, noise]
-    agent_opt7 = [2, "epsilon", 1.25, noise]
-    #agent_opt4 = [2, False, "PUCT_context", 1, noise]
+    agent_opt3 = [2, "epsilon", 1, noise]
+    agent_opt4 = [2, True, np.linspace(0, 1, 20), "UCT1"]
 
     #agent_opt3 = [2, True, np.linspace(0, 1, 4000), "thompson"]
     #agent_opt4 = [2, False, "PUCT_context", 1, noise]
@@ -30,18 +26,18 @@ if __name__ == '__main__':
     #agent_opt6 = [2, False, "thompson", 1, noise]
     #agent_opt6 = [2, True, "alphaGo", 1, noise]
 
-    option_list = [agent_opt3, agent_opt4, agent_opt5, agent_opt6, agent_opt7]
-    labels = ["s = 0.25", "s = 0.5", "s = 0.75", "s = 1", "s = 1.25"]
-    agents = [UCB1_agent, UCB1_agent, UCB1_agent, UCB1_agent, UCB1_agent]
+    option_list = [agent_opt4, agent_opt2, agent_opt3]
+    labels = ["Vector UCT", "Bayes UCT", "Epsilon s = 1"]
+    agents = [Bays_agent_vector_UCT2, Bays_agent_Gauss_beta, UCB1_agent]
 
     assert(len(option_list) == len(labels))
     assert (len(option_list) == len(agents))
 
     t = time()
-    test = explore_parallel_noise_tree(N_data_points, agents, n_parallel, 1000, 0.5, option_list)
+    test = explore_parallel_noise_tree(N_data_points, agents, n_parallel, 10, 1, option_list)
 
     p = Pool(n_threads)
-    results = p.starmap(explore_parallel_noise_tree, iterable=[(N_data_points, agents, n_parallel, 1000, 0.5, option_list)] * N_rep)
+    results = p.starmap(explore_parallel_noise_tree, iterable=[(N_data_points, agents, n_parallel, 10, 1, option_list)] * N_rep)
     p.close()
     p.join()
 
@@ -192,7 +188,7 @@ if __name__ == '__main__':
     plt.savefig("Greedy_choice.pdf")
     plt.show()
 
-
+    """
     #  Plot more
     fig, ax = plt.subplots(1, 1)
     ax.plot(np.mean(regret_second, axis=0), label=labels[0])
@@ -219,3 +215,4 @@ if __name__ == '__main__':
     with open('regret_figure_d1.pkl', 'wb') as file:
         pickle.dump(ax, file)
     fig.savefig("regret_figure.pdf")
+    """

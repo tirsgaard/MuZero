@@ -18,6 +18,7 @@ from torch.optim.lr_scheduler import StepLR, ReduceLROnPlateau
 from storage_functions import experience_replay_server
 from torch.utils.tensorboard import SummaryWriter
 from models import muZero, calc_support_dist
+from helper_functions import normal_support
 import warnings
 import copy
 
@@ -109,6 +110,23 @@ def squared_loss(u, r, z, v, pi, P, P_imp, N, beta, mean=True):
     else:
         return total_error, reward_error, value_error, policy_error
 
+def bayes_muZero_loss(u, r, z, v, pi, P, P_imp, N, beta, n_iter=0, mean=True):
+    # Loss used for atari. Assumes r, v, P are in logspace and sorftmaxed
+    def cross_entropy(target, input):
+        assert (target.shape == input.shape)
+        loss = -torch.sum(target*input, dim=-1)
+        return loss
+
+    reward_error = cross_entropy(u, r)
+    value_error = cross_entropy(z, v)
+    policy_error = cross_entropy(pi, P)
+    total_error = reward_error + value_error + policy_error.mean(-1)
+    total_error = (total_error/(P_imp[:, None] * N))**beta  # Scale gradient with importance weighting
+    if mean:
+        return total_error.mean(), reward_error.mean(), value_error.mean(), policy_error.mean()
+    else:
+        return total_error, reward_error, value_error, policy_error
+
 
 def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta, n_iter=0, mean=True):
     # Loss used for atari. Assumes r, v, P are in logspace and sorftmaxed
@@ -120,7 +138,7 @@ def muZero_games_loss(u, r, z, v, pi, P, P_imp, N, beta, n_iter=0, mean=True):
     reward_error = cross_entropy(u, r)
     value_error = cross_entropy(z, v)
     policy_error = cross_entropy(pi, P)
-    total_error = reward_error + value_error + policy_error*(1-0.997**np.log(n_iter+1))
+    total_error = reward_error + value_error + policy_error
     total_error = (total_error/(P_imp[:, None] * N))**beta  # Scale gradient with importance weighting
     if mean:
         return total_error.mean(), reward_error.mean(), value_error.mean(), policy_error.mean()
@@ -148,11 +166,13 @@ class model_trainer:
         self.hidden_S_size = MCTS_settings["hidden_S_size"]
         self.action_size = MCTS_settings["action_size"]
         self.wr_Q = MCTS_settings["Q_writer"]
+        self.bayesian = MCTS_settings["bayesian"]
         if training_settings["use_different_gpu"]:
             self.device = torch.device('cuda:' + str(torch.cuda.device_count()-1))
+            torch.cuda.set_device(self.device)
         else:
             self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-        torch.cuda.set_device(self.device)
+
         self.training_counter = 0
 
         # Check for cuda
@@ -173,7 +193,10 @@ class model_trainer:
         self.muZero = muZero(self.f_model_train, self.g_model_train, self.h_model_train, self.K, self.hidden_S_size, self.action_size)
         #self.optimizer = optim.SGD(self.muZero.parameters(), lr=self.lr_init, momentum=self.momentum, weight_decay=self.weight_decay)
         self.optimizer = optim.Adam(self.muZero.parameters(), lr=self.lr_init, weight_decay=self.weight_decay)
-        self.criterion = muZero_games_loss
+        if MCTS_settings["bayesian"]:
+            self.criterion = bayes_muZero_loss
+        else:
+            self.criterion = muZero_games_loss
 
         gamma = self.lr_decay_rate ** (1 / self.lr_decay_steps)
         self.scheduler = StepLR(self.optimizer, step_size=1, gamma=gamma)
@@ -201,16 +224,18 @@ class model_trainer:
                                                                                                                 self.K,
                                                                                                                 uniform_sampling=self.uniform_sampling)
                 S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp = self.convert_torch([S_batch, a_batch, u_batch, done_batch, pi_batch, z_batch, P_imp])
-                print(u_batch.device)
-                print(self.g_model_train.support.device)
-                u_support_batch, u_scaled = calc_support_dist(u_batch, self.g_model_train.support, scale_value=self.scale_values)
-                z_support_batch, z_scaled = calc_support_dist(z_batch, self.f_model_train.support, scale_value=self.scale_values)
-                assert(torch.all(torch.isclose(pi_batch.sum(dim=2), torch.tensor(1.))))
-                assert(torch.all(torch.isclose(u_support_batch.sum(dim=2), torch.tensor(1.))))
-                assert(torch.all(torch.isclose(z_support_batch.sum(dim=2), torch.tensor(1.))))
-                assert(torch.all(torch.isclose(self.g_model_train.dist2mean(u_support_batch.view(self.BS*self.K, -1), None), u_scaled.view(-1), atol=1e-06)))
-                assert(torch.all(torch.isclose(self.f_model_train.dist2mean(z_support_batch.view(self.BS*self.K, -1), None), z_scaled.view(-1), atol=1e-06)))
 
+                u_support_batch, u_scaled = calc_support_dist(u_batch.to(torch.float64), self.g_model_train.support, scale_value=self.scale_values)
+                z_support_batch, z_scaled = calc_support_dist(z_batch.to(torch.float64), self.f_model_train.support, scale_value=self.scale_values)
+                if self.bayesian:
+                    pi_view = pi_batch[:, :, :, 0].view(-1, pi_batch.shape[2])
+                    pi_view[range(pi_view.shape[0]), a_batch.view(-1)] = z_batch.view(-1)
+                    pi_batch = normal_support(pi_batch[:, :, :, 0], pi_batch[:, :, :, 1], self.f_model_train.trans_support)
+                #assert(torch.all(torch.isclose(pi_batch.sum(dim=2), torch.tensor(1.))))
+                assert(torch.all(torch.isclose(u_support_batch.sum(dim=2), torch.tensor(1., dtype=torch.float64))))
+                assert(torch.all(torch.isclose(z_support_batch.sum(dim=2), torch.tensor(1., dtype=torch.float64))))
+                assert(torch.all(torch.isclose(self.g_model_train.dist2mean(u_support_batch.view(self.BS*self.K, -1), None), u_scaled.view(-1).to(torch.float64), atol=1e-06)))
+                assert(torch.all(torch.isclose(self.f_model_train.dist2mean(z_support_batch.view(self.BS*self.K, -1), None), z_scaled.view(-1).to(torch.float64), atol=1e-06)))
 
             # Optimize
             self.optimizer.zero_grad()
@@ -241,6 +266,8 @@ class model_trainer:
                 self.wr_Q.put(['dist', 'Output/v', v_batches.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Output/P', P_batches.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'Output/r', r_batches.detach().cpu(), self.training_counter])
+                self.wr_Q.put(['scalar', 'Output/P_max', torch.mean(torch.max(P_batches, dim=2)[0]).detach().cpu(),
+                               self.training_counter])
                 r_trans = self.g_model_train.dist2mean(r_batches.view(self.BS*self.K, -1).exp(), self.scale_values)
                 v_trans = self.f_model_train.dist2mean(v_batches.view(self.BS*self.K, -1).exp(), self.scale_values)
                 self.wr_Q.put(['dist', 'Output/transformed_r', r_trans.detach().cpu(), self.training_counter])
@@ -258,6 +285,8 @@ class model_trainer:
                 self.wr_Q.put(['dist', 'data/u', u_batch.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'data/z', z_batch.detach().cpu(), self.training_counter])
                 self.wr_Q.put(['dist', 'data/Pi', pi_batch.detach().cpu(), self.training_counter])
+                self.wr_Q.put(['scalar', 'data/Pi_max', torch.mean(torch.max(pi_batch, dim=2)[0]).detach().cpu(),
+                               self.training_counter])
 
                 self.wr_Q.put(['scalar', 'Total_loss/train', loss.mean().detach().cpu(), self.training_counter])
                 self.wr_Q.put(['scalar', 'Reward_loss/train', r_loss.mean().detach().cpu(), self.training_counter])

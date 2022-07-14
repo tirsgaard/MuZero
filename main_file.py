@@ -11,15 +11,16 @@ Created on Sat Nov 23 16:44:33 2019
 from game_functions import sim_games
 from training_functions import train_ex_worker, writer_worker
 from torch.multiprocessing import Process, Queue
-from models import dummy_networkF, dummy_networkG, dummy_networkH, ram_network_convH
-from wrappers import MaxAndSkipEnv, RAMAndSkipEnv
+from models import dummy_networkF, dummy_networkG, dummy_networkH, ram_network_convH, ram_network_convG, ram_network_convF, ram_network_convF_bayes, h_inverse_scale, ram_network_convF_dist
+from wrappers import MaxAndSkipEnv, RAMAndSkipEnv, RAM_Breakout
 from go_model import ResNet_g, ResNet_f, ResNet_h
 import gym
 import hyperparameters as conf
+from MCTS import gamma_contract
 from test_env import binTestEnv
 import numpy as np
-
 import torch
+from helper_functions import trans_conv_prepare
 
 # TODO remove late start
 
@@ -29,6 +30,8 @@ if __name__ == '__main__':
     experience_settings = conf.experience_settings
     MCTS_settings = conf.MCTS_settings
     training_settings = conf.training_settings
+    MCTS_settings["bayesian"] = MuZero_settings["bayesian"]
+
     # Construct networks
     observation_shape = (experience_settings["past_obs"]*MCTS_settings["observation_channels"],) + MCTS_settings["observation_size"]  # input to f
     hidden_shape = (MCTS_settings["hidden_S_channel"], ) + MCTS_settings["hidden_S_size"]  # input to f
@@ -40,17 +43,19 @@ if __name__ == '__main__':
     np.random.seed(1)
 
     support = torch.linspace(MuZero_settings["low_support"], MuZero_settings["high_support"], n_heads)
+    """
     f_model = dummy_networkF(hidden_shape, action_size, 256, support, transform_values)
     g_model = ResNet_g(hidden_input_size[0], 256, MCTS_settings["hidden_S_size"],
                        MCTS_settings["hidden_S_channel"], 4096,
                        support, transform_values)
     h_model = ram_network_convH(observation_shape, hidden_shape, 128)
-
-
-    #h_model = ConvResNet(experience_settings["past_obs"], MCTS_settings["hidden_S_channel"], hidden_shape)  # identity_networkH((1, 2, 2), hidden_shape)
-    #g_model = ResNet_g(MCTS_settings["hidden_S_channel"]+action_size[0], 32, hidden_shape, MCTS_settings["hidden_S_channel"], 128)  # identity_networkG(hidden_input_size, hidden_shape)
-    #f_model = identity_networkF(hidden_shape, action_size)  # ResNet_f(MCTS_settings["hidden_S_channel"], 32, 4, action_size, 128)
-
+    """
+    f_model = ram_network_convF_dist(hidden_shape, MCTS_settings["action_size"], 2048, support, transform_values)
+    #g_model = ram_network_convG(hidden_input_size, hidden_shape, 1024, support, transform_values)
+    g_model = ResNet_g(hidden_input_size[0], 256, MCTS_settings["hidden_S_size"],
+                       MCTS_settings["hidden_S_channel"], 4096,
+                       support, transform_values)
+    h_model = ram_network_convH(observation_shape, hidden_shape, 2048)
 
     # Add mean pass and support
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -66,13 +71,17 @@ if __name__ == '__main__':
         f_model.to(device)
         g_model.to(device)
         h_model.to(device)
-    f_model.share_memory()
-    g_model.share_memory()
-    h_model.share_memory()
+    #f_model.share_memory()
+    #g_model.share_memory()
+    #h_model.share_memory()
 
-    env_maker = lambda render: RAMAndSkipEnv(gym.make("ALE/Breakout-v5", full_action_space=False, obs_type="ram", render_mode=render))
+    env_maker = RAM_Breakout  # lambda render: RAMAndSkipEnv(gym.make("ALE/Breakout-v5", full_action_space=False, obs_type="ram", render_mode=render))
+
 
     # Construct model trainer and experience storage
+    if MuZero_settings["bayesian"]:
+        #MCTS_settings["contracter"] = gamma_contract(MCTS_settings["gamma"], support.numpy())
+        MCTS_settings["add_dist_mat"] = trans_conv_prepare(support.numpy(), h_inverse_scale)
     torch.multiprocessing.set_start_method('spawn', force=True)
     Q_writer = Queue()
     training_settings["Q_writer"] = Q_writer
